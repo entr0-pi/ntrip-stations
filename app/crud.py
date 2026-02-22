@@ -1,7 +1,8 @@
 from datetime import datetime, timezone
+from pathlib import Path
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from app.models import Station
+from app.models import Station, Country
 
 def get_station_count(db: Session) -> int:
     return db.query(func.count(Station.id)).scalar()
@@ -56,3 +57,27 @@ def replace_all_stations(db: Session, station_dicts: list[dict]) -> int:
     db.bulk_save_objects(objects)
     db.commit()
     return len(objects)
+
+def seed_countries(db: Session) -> int:
+    """Populate the countries table from the CSV. Skips if already seeded."""
+    if db.query(Country).count() > 0:
+        return 0
+
+    csv_path = Path(__file__).parent.parent / "data" / "ISO 3166-1 alpha-2 Country Code List.csv"
+    rows = []
+    with open(csv_path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            name, code = line.split(";", 1)
+            rows.append(Country(code=code.strip().lower(), name=name.strip()))
+
+    db.bulk_save_objects(rows)
+    db.commit()
+    return len(rows)
+
+def get_all_countries(db: Session) -> list[dict]:
+    """Return all countries sorted by name."""
+    rows = db.query(Country).order_by(Country.name).all()
+    return [{"code": r.code, "name": r.name} for r in rows]

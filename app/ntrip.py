@@ -4,17 +4,28 @@
 import socket
 import math
 import json
-from urllib.request import urlopen, Request
-from urllib.parse import quote
+import os
+import requests
+from dotenv import load_dotenv
 
-# ── Constants ───────────────────────────────────────────────────────────
+# ── Load environment variables ──────────────────────────────────────────
 
-HOST = "rtk2go.com"
-PORT = 2101
-MAX_BYTES = 4 * 1024 * 1024  # 4 MiB
-TIMEOUT_S = 30
-EARTH_RADIUS_KM = 6371.0
-NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
+load_dotenv()
+
+# ── Constants (configurable via .env) ────────────────────────────────────
+
+# Geoapify geocoding
+GEOAPIFY_API_KEY = os.getenv("GEOAPIFY_API_KEY")
+GEOAPIFY_URL = "https://api.geoapify.com/v1/geocode/search"
+
+# RTK2GO NTRIP server
+HOST = os.getenv("RTK2GO_HOST", "rtk2go.com")
+PORT = int(os.getenv("RTK2GO_PORT", "2101"))
+TIMEOUT_S = int(os.getenv("RTK2GO_TIMEOUT_SECS", "30"))
+MAX_BYTES = int(os.getenv("RTK2GO_MAX_BYTES_MB", "4")) * 1024 * 1024
+
+# Earth radius (km) for distance calculations
+EARTH_RADIUS_KM = float(os.getenv("EARTH_RADIUS_KM", "6371.0"))
 
 
 # ── Sourcetable Fetch & Parse (from RTK2GO_Stations.py) ─────────────────
@@ -131,11 +142,12 @@ def find_nearest(lat: float, lon: float, stations: list, n: int = 5) -> list:
 
 # ── Geocoding (from RTK2GO_Nearest_Address.py) ──────────────────────────
 
-def geocode(address: str) -> tuple[float, float, str]:
-    """Geocode an address to (lat, lon, display_name) via Nominatim.
+def geocode(address: str, country_code: str | None = None) -> tuple[float, float, str]:
+    """Geocode an address to (lat, lon, display_name) via Geoapify.
 
     Args:
         address: Address or place name string
+        country_code: Optional ISO 3166-1 alpha-2 country code to restrict results
 
     Returns:
         Tuple of (latitude, longitude, display_name)
@@ -143,11 +155,15 @@ def geocode(address: str) -> tuple[float, float, str]:
     Raises:
         ValueError: If address not found
     """
-    url = f"{NOMINATIM_URL}?q={quote(address)}&format=json&limit=1"
-    req = Request(url, headers={"User-Agent": "NTRIP RTK2go PythonClient/1.0"})
-    with urlopen(req, timeout=10) as resp:
-        data = json.loads(resp.read().decode("utf-8"))
-    if not data:
+    params = {"text": address, "apiKey": GEOAPIFY_API_KEY, "limit": 1}
+    if country_code:
+        params["filter"] = f"countrycode:{country_code.lower()}"
+    headers = {"Accept": "application/json"}
+    resp = requests.get(GEOAPIFY_URL, params=params, headers=headers, timeout=10)
+    resp.raise_for_status()
+    data = resp.json()
+    features = data.get("features", [])
+    if not features:
         raise ValueError(f"Address not found: {address}")
-    result = data[0]
-    return float(result["lat"]), float(result["lon"]), result["display_name"]
+    props = features[0]["properties"]
+    return float(props["lat"]), float(props["lon"]), props["formatted"]

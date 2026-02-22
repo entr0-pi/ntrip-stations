@@ -81,7 +81,15 @@
     <!-- ── Search form ──────────────────────────────── -->
     <div class="card bg-base-100 shadow">
       <div class="card-body">
-        <form method="post" action="/search">
+        <div id="rate-limit-alert" class="alert alert-warning mb-4 hidden gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4v2m0 4v2M9 3h6m0 0a3 3 0 00-3 3v12a3 3 0 003 3h6a3 3 0 003-3V6a3 3 0 00-3-3z"></path></svg>
+          <div>
+            <h3 class="font-bold">Rate limit exceeded</h3>
+            <div class="text-sm" id="rate-limit-msg">Too many requests. Please wait.</div>
+          </div>
+        </div>
+
+        <form method="post" action="/search" id="search-form">
           <div class="tabs tabs-boxed mb-4" id="input-tabs">
             <a class="tab tab-active" onclick="switchTab('address')">By Address</a>
             <a class="tab" onclick="switchTab('coords')">By Coordinates</a>
@@ -91,9 +99,17 @@
           <div id="tab-address">
             <label class="form-control w-full">
               <div class="label"><span class="label-text">Address or place name</span></div>
-              <input type="text" name="address" placeholder="e.g. Montreal, Quebec"
-                     class="input input-bordered w-full"
-                     value="{{ request.query_params.get('address', '') }}">
+              <div class="flex gap-2">
+                <input type="text" name="address" placeholder="e.g. Montreal, Quebec"
+                       class="input input-bordered flex-1"
+                       value="{{ request.query_params.get('address', '') }}">
+                <select name="country_code" class="select select-bordered w-48">
+                  <option value="">All countries</option>
+                  {% for c in countries %}
+                  <option value="{{ c.code }}"{% if selected_country_code == c.code %} selected{% endif %}>{{ c.name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
             </label>
           </div>
 
@@ -113,7 +129,7 @@
             </div>
           </div>
 
-          <button type="submit" class="btn btn-primary mt-4 w-full">
+          <button type="button" id="search-btn" class="btn btn-primary mt-4 w-full" onclick="handleSearchSubmit(event)">
             Find Nearest Stations
           </button>
 
@@ -176,8 +192,17 @@
             </tbody>
           </table>
         </div>
+        <div class="flex justify-end mt-3">
+          <button onclick="downloadCSV()" class="btn btn-sm btn-outline">
+            Download CSV
+          </button>
+        </div>
       </div>
     </div>
+
+    <script>
+      const stationData = {{ result.nearest | tojson }};
+    </script>
 
     {% endif %} {# end if result #}
 
@@ -236,6 +261,20 @@
 
       try {
         const resp = await fetch('/refresh', { method: 'POST' });
+
+        // Handle rate limit (429)
+        if (resp.status === 429) {
+          btn.innerHTML = 'Limited to 1/day - retry tomorrow';
+          btn.classList.add('btn-warning');
+          btn.disabled = true;
+          setTimeout(() => {
+            btn.innerHTML = 'Refresh DB';
+            btn.classList.remove('btn-warning');
+            btn.disabled = false;
+          }, 3000);
+          return;
+        }
+
         if (!resp.ok) throw new Error(await resp.text());
         const data = await resp.json();
 
@@ -259,6 +298,26 @@
         btn.disabled = false;
         console.error(err);
       }
+    }
+
+    // ── Download CSV ────────────────────────────────────
+    function downloadCSV() {
+      const headers = ['Rank', 'Distance (km)', 'Mountpoint', 'City', 'Country',
+                       'Format', 'Network', 'Auth', 'Bitrate'];
+      const rows = stationData.map(st => [
+        st.rank, st.dist_km, st.mount, st.city, st.country,
+        st.format, st.network, st.auth, st.bitrate
+      ]);
+      const csv = [headers, ...rows]
+        .map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(','))
+        .join('\r\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'ntrip-nearest-stations.csv';
+      a.click();
+      URL.revokeObjectURL(url);
     }
 
     // ── Leaflet map (only when result is present) ──────
@@ -356,6 +415,87 @@
       map.fitBounds(bounds.pad(0.15));
     })();
     {% endif %}
+
+    // ── Search rate-limit & submission handling ────────
+    const BROWSER_COOLDOWN = {{ BROWSER_SEARCH_COOLDOWN_SECS }};
+    let rateLimitResetTime = null;
+
+    async function handleSearchSubmit(event) {
+      event.preventDefault();
+      const form = document.getElementById('search-form');
+      const btn = document.getElementById('search-btn');
+      const alertDiv = document.getElementById('rate-limit-alert');
+      const alertMsg = document.getElementById('rate-limit-msg');
+
+      // Check if rate limit is active
+      if (rateLimitResetTime && Date.now() < rateLimitResetTime) {
+        const secs = Math.ceil((rateLimitResetTime - Date.now()) / 1000);
+        alertMsg.textContent = `Rate limit active. Try again in ${secs}s.`;
+        alertDiv.classList.remove('hidden');
+        return;
+      }
+
+      // Hide alert if not rate limited
+      alertDiv.classList.add('hidden');
+
+      // Disable button and show searching state
+      btn.disabled = true;
+      btn.textContent = 'Searching...';
+
+      try {
+        const formData = new FormData(form);
+        const response = await fetch('/search', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (response.status === 429) {
+          // Rate limit exceeded - show message and block with countdown
+          alertMsg.textContent = 'Too many requests. Please wait at least 1 second before trying again.';
+          alertDiv.classList.remove('hidden');
+          rateLimitResetTime = Date.now() + 2000;
+          btn.disabled = true;
+          btn.textContent = 'Rate Limited - Wait...';
+
+          // Show countdown for rate limit
+          let cooldown = 2;
+          const timer = setInterval(() => {
+            cooldown--;
+            if (cooldown <= 0) {
+              clearInterval(timer);
+              btn.disabled = false;
+              btn.textContent = 'Find Nearest Stations';
+            } else {
+              btn.textContent = `Rate Limited - ${cooldown}s...`;
+            }
+          }, 1000);
+          return;
+        }
+
+        // Success - do a proper page load to initialize all scripts
+        if (response.ok) {
+          // Use the Fetch API response as the new page by submitting the form normally
+          // This is the cleanest approach - just let the browser handle the normal form submission
+          const originalOnclick = btn.onclick;
+          btn.onclick = null; // Prevent recursion
+          form.submit();
+        } else {
+          throw new Error('Search failed');
+        }
+      } catch (error) {
+        console.error('Search error:', error);
+        btn.disabled = false;
+        btn.textContent = 'Find Nearest Stations';
+      }
+    }
+
+    // Attach handler to button
+    document.addEventListener('DOMContentLoaded', function() {
+      const btn = document.getElementById('search-btn');
+      if (btn) {
+        btn.onclick = handleSearchSubmit;
+      }
+    });
   </script>
 
 </body>

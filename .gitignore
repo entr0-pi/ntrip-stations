@@ -1,3 +1,8 @@
 .claude
 rtk2go.db
 __pycache__*
+.env
+.pytest_cache/
+*.pyc
+.coverage
+htmlcov/
