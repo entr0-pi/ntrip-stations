@@ -1,6 +1,4 @@
 """NTRIP station discovery and geolocation service.
-
-Merged from RTK2GO_Stations.py, RTK2GO_Nearest.py, and RTK2GO_Nearest_Address.py
 """
 
 import socket
