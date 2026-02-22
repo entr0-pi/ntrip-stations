@@ -31,12 +31,19 @@ FastAPI Application
 # Update system packages
 sudo apt update && sudo apt upgrade -y
 
+# Add deadsnakes PPA for Python 3.11 (if not in default repos)
+sudo apt install software-properties-common -y
+sudo add-apt-repository ppa:deadsnakes/ppa -y
+sudo apt update
+
 # Install Python and dependencies
-sudo apt install python3.11 python3.11-venv python3-pip nginx -y
+sudo apt install python3.11 python3.11-venv python3-pip -y
 
 # Install git
 sudo apt install git -y
 ```
+
+**Note:** If `add-apt-repository` is not available or you're on a system without PPA support, use your distribution's package manager or build Python 3.11 from source.
 
 ### Create Application User
 
