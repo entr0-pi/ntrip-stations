@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RTK2GO Station Finder</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- DaisyUI -->
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4/dist/full.min.css" rel="stylesheet" />
+
+    <!-- Leaflet -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js"></script>
+
+    <style>
+        #map { height: 420px; }
+        /* Rover icon: blue circle matching the existing generate_map() style */
+        .rover-icon div {
+            background: #2563eb;
+            width: 20px; height: 20px;
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 0 8px rgba(0,0,0,.5);
+        }
+    </style>
+
+    <script>
+      // Initialize theme from localStorage or system preference
+      // cupcake = light mode, dim = dark mode
+      (function() {
+        const savedTheme = localStorage.getItem('theme');
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const theme = savedTheme || (prefersDark ? 'dim' : 'cupcake');
+        document.documentElement.setAttribute('data-theme', theme);
+        localStorage.setItem('theme', theme);
+      })();
+    </script>
+</head>
+<body class="bg-base-200 min-h-screen p-4">
+
+  <div class="max-w-4xl mx-auto space-y-6">
+
+    <!-- ── Header ──────────────────────────────────── -->
+    <div class="card bg-base-100 shadow">
+      <div class="card-body">
+        <h1 class="card-title text-2xl">RTK2GO Station Finder</h1>
+
+        <!-- DB status bar -->
+        <div class="flex flex-wrap items-center gap-3 text-sm">
+          <span class="badge badge-neutral" id="db-count">
+            {{ station_count }} stations in DB
+          </span>
+          {% if last_updated %}
+          <span class="text-base-content/60" id="db-updated">
+            Last updated: {{ last_updated.strftime('%Y-%m-%d %H:%M UTC') }}
+          </span>
+          {% else %}
+          <span class="text-warning" id="db-updated">DB is empty</span>
+          {% endif %}
+
+          <!-- Refresh button -->
+          <button id="refresh-btn" class="btn btn-sm btn-outline btn-primary"
+                  onclick="refreshDB()">
+            Refresh DB
+          </button>
+
+          <!-- Theme toggle (improved) -->
+          <div class="ml-auto flex items-center gap-2 px-3 py-1.5 bg-base-200 rounded-lg">
+            <span class="text-lg" id="theme-icon">🌙</span>
+            <input type="checkbox" id="theme-checkbox" class="toggle toggle-sm"
+                   onchange="toggleTheme()" title="Toggle theme">
+            <span class="text-lg">☀️</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Search form ──────────────────────────────── -->
+    <div class="card bg-base-100 shadow">
+      <div class="card-body">
+        <form method="post" action="/search">
+          <div class="tabs tabs-boxed mb-4" id="input-tabs">
+            <a class="tab tab-active" onclick="switchTab('address')">By Address</a>
+            <a class="tab" onclick="switchTab('coords')">By Coordinates</a>
+          </div>
+
+          <!-- Address input -->
+          <div id="tab-address">
+            <label class="form-control w-full">
+              <div class="label"><span class="label-text">Address or place name</span></div>
+              <input type="text" name="address" placeholder="e.g. Montreal, Quebec"
+                     class="input input-bordered w-full"
+                     value="{{ request.query_params.get('address', '') }}">
+            </label>
+          </div>
+
+          <!-- Coordinates input (hidden by default) -->
+          <div id="tab-coords" class="hidden">
+            <div class="grid grid-cols-2 gap-3">
+              <label class="form-control">
+                <div class="label"><span class="label-text">Latitude</span></div>
+                <input type="number" step="any" name="lat" placeholder="45.5017"
+                       class="input input-bordered">
+              </label>
+              <label class="form-control">
+                <div class="label"><span class="label-text">Longitude</span></div>
+                <input type="number" step="any" name="lon" placeholder="-73.5673"
+                       class="input input-bordered">
+              </label>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary mt-4 w-full">
+            Find Nearest Stations
+          </button>
+
+          <div class="alert alert-info text-sm mt-3">
+            <span>💡 Tip: After searching, click anywhere on the map to get coordinates and search from that location</span>
+          </div>
+        </form>
+
+        {% if error %}
+        <div class="alert alert-error mt-3">
+          <span>{{ error }}</span>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- ── Results (only rendered when result is not None) ─── -->
+    {% if result %}
+
+    <!-- Leaflet map -->
+    <div class="card bg-base-100 shadow">
+      <div class="card-body p-2">
+        <div id="map" class="rounded-lg"></div>
+      </div>
+    </div>
+
+    <!-- Station results table -->
+    <div class="card bg-base-100 shadow">
+      <div class="card-body">
+        <h2 class="card-title text-lg">5 Nearest Stations</h2>
+        <div class="overflow-x-auto">
+          <table class="table table-zebra w-full">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Dist (km)</th>
+                <th>Mountpoint</th>
+                <th>City</th>
+                <th>Country</th>
+                <th>Format</th>
+                <th>Network</th>
+                <th>Auth</th>
+                <th>Bitrate</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for st in result.nearest %}
+              <tr>
+                <td>{{ st.rank }}</td>
+                <td>{{ st.dist_km }}</td>
+                <td class="font-mono font-semibold">{{ st.mount }}</td>
+                <td>{{ st.city }}</td>
+                <td>{{ st.country }}</td>
+                <td>{{ st.format }}</td>
+                <td>{{ st.network }}</td>
+                <td>{{ st.auth }}</td>
+                <td>{{ st.bitrate }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    {% endif %} {# end if result #}
+
+  </div> {# end max-w container #}
+
+  <!-- ── JavaScript ───────────────────────────────────── -->
+  <script>
+    // ── Tab switcher ───────────────────────────────────
+    function switchTab(mode) {
+      const tabs = document.querySelectorAll('#input-tabs .tab');
+      document.getElementById('tab-address').classList.add('hidden');
+      document.getElementById('tab-coords').classList.add('hidden');
+      if (mode === 'address') {
+        document.getElementById('tab-address').classList.remove('hidden');
+        tabs[0].classList.add('tab-active');
+        tabs[1].classList.remove('tab-active');
+      } else {
+        document.getElementById('tab-coords').classList.remove('hidden');
+        tabs[1].classList.add('tab-active');
+        tabs[0].classList.remove('tab-active');
+      }
+    }
+
+    // ── Theme toggle ────────────────────────────────────
+    // cupcake = light (left), dim = dark (right)
+    function toggleTheme() {
+      const html = document.documentElement;
+      const currentTheme = html.getAttribute('data-theme');
+      const newTheme = currentTheme === 'cupcake' ? 'dim' : 'cupcake';
+
+      html.setAttribute('data-theme', newTheme);
+      localStorage.setItem('theme', newTheme);
+
+      // Update checkbox state (inverted for visual alignment)
+      const checkbox = document.getElementById('theme-checkbox');
+      checkbox.checked = newTheme === 'cupcake';
+
+      console.log('Theme switched to: ' + newTheme);
+    }
+
+    // Initialize checkbox on page load
+    window.addEventListener('DOMContentLoaded', function() {
+      const currentTheme = document.documentElement.getAttribute('data-theme');
+      const checkbox = document.getElementById('theme-checkbox');
+      checkbox.checked = currentTheme === 'cupcake';
+    });
+
+    // ── Refresh DB ─────────────────────────────────────
+    async function refreshDB() {
+      const btn = document.getElementById('refresh-btn');
+      const countBadge = document.getElementById('db-count');
+      const updatedSpan = document.getElementById('db-updated');
+
+      btn.disabled = true;
+      btn.innerHTML = '<span class="loading loading-spinner loading-sm"></span> Fetching...';
+
+      try {
+        const resp = await fetch('/refresh', { method: 'POST' });
+        if (!resp.ok) throw new Error(await resp.text());
+        const data = await resp.json();
+
+        // Patch DOM without full page reload
+        countBadge.textContent = data.count + ' stations in DB';
+        updatedSpan.textContent = 'Last updated: ' + new Date(data.last_updated).toUTCString();
+        updatedSpan.className = 'text-base-content/60';
+
+        btn.classList.remove('btn-outline');
+        btn.classList.add('btn-success');
+        btn.innerHTML = 'Done!';
+        setTimeout(() => {
+          btn.innerHTML = 'Refresh DB';
+          btn.classList.add('btn-outline');
+          btn.classList.remove('btn-success');
+          btn.disabled = false;
+        }, 2000);
+      } catch (err) {
+        btn.innerHTML = 'Error - retry';
+        btn.classList.add('btn-error');
+        btn.disabled = false;
+        console.error(err);
+      }
+    }
+
+    // ── Leaflet map (only when result is present) ──────
+    {% if result %}
+    (function() {
+      const myPos  = [{{ result.lat }}, {{ result.lon }}];
+      const stations = {{ result.nearest | tojson }};
+      let searchMarker = null;  // marker for clicked location
+
+      const map = L.map('map').setView(myPos, 8);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors',
+        maxZoom: 18
+      }).addTo(map);
+
+      const bounds = L.latLngBounds([myPos]);
+
+      // ── Map click handler: capture lat/lon and update form ──
+      map.on('click', function(e) {
+        const lat = e.latlng.lat.toFixed(4);
+        const lon = e.latlng.lng.toFixed(4);
+
+        // Update form inputs
+        document.querySelector('input[name="lat"]').value = lat;
+        document.querySelector('input[name="lon"]').value = lon;
+
+        // Clear address field
+        document.querySelector('input[name="address"]').value = '';
+
+        // Switch to coordinates tab
+        switchTab('coords');
+
+        // Remove old marker if exists
+        if (searchMarker) map.removeLayer(searchMarker);
+
+        // Add new marker at clicked location (orange/yellow)
+        searchMarker = L.marker([lat, lon], {
+          icon: L.divIcon({
+            className: '',
+            html: '<div style="background:#f59e0b; width:24px; height:24px; border-radius:50%; border:3px solid white; box-shadow:0 0 6px rgba(0,0,0,.4);"></div>',
+            iconSize: [24, 24],
+            iconAnchor: [12, 12]
+          })
+        }).addTo(map).bindPopup(`<b>Click to search</b><br>${lat}, ${lon}<br><button class="btn btn-xs btn-primary mt-1" onclick="document.querySelector('form').submit()">Search from here</button>`).openPopup();
+
+        console.log('Clicked: ' + lat + ', ' + lon);
+      });
+
+      // Station markers + connecting lines
+      stations.forEach(function(st, idx) {
+        const ll = [st.lat, st.lon];
+        bounds.extend(ll);
+
+        // Dashed line from rover to station
+        L.polyline([myPos, ll], {
+          color: idx === 0 ? '#38a169' : '#e53e3e',
+          weight: 2, opacity: 0.6, dashArray: '6 4'
+        }).addTo(map);
+
+        // Numbered div icon
+        const iconHtml = `<div style="
+            background:${idx===0 ? '#38a169' : '#e53e3e'};
+            color:white; font-weight:bold; font-size:13px;
+            width:26px; height:26px; border-radius:50%;
+            display:flex; align-items:center; justify-content:center;
+            border:2px solid white;
+            box-shadow:0 0 6px rgba(0,0,0,.4);">${st.rank}</div>`;
+
+        const popup = `<b>#${st.rank} ${st.mount}</b><br>
+            ${st.city}, ${st.country}<br>
+            Format: ${st.format}<br>
+            Distance: ${st.dist_km} km`;
+
+        L.marker(ll, {
+          icon: L.divIcon({
+            className: '',
+            html: iconHtml,
+            iconSize: [26, 26],
+            iconAnchor: [13, 13]
+          })
+        }).addTo(map).bindPopup(popup);
+      });
+
+      // Rover marker (blue, on top)
+      L.marker(myPos, {
+        icon: L.divIcon({
+          className: 'rover-icon',
+          html: '<div></div>',
+          iconSize: [20, 20],
+          iconAnchor: [10, 10]
+        }),
+        zIndexOffset: 1000
+      }).addTo(map).bindPopup(`<b>Your Location</b><br>{{ "%.4f"|format(result.lat) }}, {{ "%.4f"|format(result.lon) }}`);
+
+      map.fitBounds(bounds.pad(0.15));
+    })();
+    {% endif %}
+  </script>
+
+</body>
+</html>
