@@ -188,14 +188,55 @@ async def search(request: Request, db: Session = Depends(get_db)):
 # ── Route 3: DB Refresh (async-friendly) ───────────────────────────────────
 
 @app.post("/refresh")
-@limiter.limit(REFRESH_DB_RATE_LIMIT)
 async def refresh_db(request: Request, db: Session = Depends(get_db)):
     """
     Fetch live data from RTK2GO and repopulate SQLite.
+    Rate limited by checking last update time in database (not per-IP).
     The blocking socket fetch runs in a thread pool executor so the event loop
     is never blocked. Returns JSON so the frontend can update the UI state.
     """
+    from datetime import datetime, timezone, timedelta
+
     try:
+        # Check if enough time has passed since last update
+        last_updated = crud.get_last_updated(db)
+        now = datetime.now(timezone.utc)
+
+        if last_updated:
+            # Parse REFRESH_DB_RATE_LIMIT (e.g., "1/day")
+            rate_parts = REFRESH_DB_RATE_LIMIT.split("/")
+            if len(rate_parts) == 2:
+                count_str, unit = rate_parts
+                try:
+                    count = int(count_str)
+                except ValueError:
+                    count = 1
+
+                # Calculate minimum time between refreshes
+                if unit == "day":
+                    min_interval = timedelta(days=count)
+                elif unit == "hour":
+                    min_interval = timedelta(hours=count)
+                elif unit == "minute":
+                    min_interval = timedelta(minutes=count)
+                elif unit == "second":
+                    min_interval = timedelta(seconds=count)
+                else:
+                    min_interval = timedelta(days=1)
+
+                # Check if enough time has passed
+                time_since_update = now - last_updated
+                if time_since_update < min_interval:
+                    hours_remaining = (min_interval - time_since_update).total_seconds() / 3600
+                    return JSONResponse(
+                        {
+                            "error": f"Database was updated {time_since_update.seconds // 3600} hours ago. "
+                                     f"Next refresh available in {int(hours_remaining)} hours.",
+                        },
+                        status_code=429,
+                    )
+
+        # Perform the refresh
         loop = asyncio.get_event_loop()
         raw = await loop.run_in_executor(None, fetch_sourcetable)
         station_dicts = parse_sourcetable(raw)
