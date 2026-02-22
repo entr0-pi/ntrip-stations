@@ -25,6 +25,8 @@ APP_DIR = Path(__file__).parent
 # Configuration from .env
 GEOAPIFY_API_RATE_LIMIT = os.getenv("GEOAPIFY_API_RATE_LIMIT", "10/minute")
 REFRESH_DB_RATE_LIMIT = os.getenv("REFRESH_DB_RATE_LIMIT", "1/day")
+DISTANCE_BADGE_GREEN_KM = int(os.getenv("DISTANCE_BADGE_GREEN_KM", "100"))
+DISTANCE_BADGE_YELLOW_KM = int(os.getenv("DISTANCE_BADGE_YELLOW_KM", "300"))
 
 # Reverse proxy setup: trust X-Forwarded-For from these hosts
 # In production, set TRUSTED_HOSTS to your reverse proxy IP (e.g., "127.0.0.1" or internal proxy IPs)
@@ -68,6 +70,8 @@ templates = Jinja2Templates(directory=str(APP_DIR / "templates"))
 templates.env.globals["BROWSER_SEARCH_COOLDOWN_SECS"] = int(
     os.getenv("BROWSER_SEARCH_COOLDOWN_SECS", "5")
 )
+templates.env.globals["DISTANCE_BADGE_GREEN_KM"] = DISTANCE_BADGE_GREEN_KM
+templates.env.globals["DISTANCE_BADGE_YELLOW_KM"] = DISTANCE_BADGE_YELLOW_KM
 
 
 # ── Route 1: Main page ──────────────────────────────────────────────────────
