@@ -9,6 +9,9 @@ def get_station_count(db: Session) -> int:
 
 def get_last_updated(db: Session) -> datetime | None:
     result = db.query(func.max(Station.updated_at)).scalar()
+    # Ensure the datetime is timezone-aware (SQLAlchemy may return naive datetime)
+    if result and result.tzinfo is None:
+        result = result.replace(tzinfo=timezone.utc)
     return result
 
 def get_all_stations_as_dicts(db: Session) -> list[dict]:

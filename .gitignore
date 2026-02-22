@@ -2,6 +2,7 @@
 rtk2go.db
 __pycache__*
 .env
+.env-production
 .pytest_cache/
 *.pyc
 .coverage

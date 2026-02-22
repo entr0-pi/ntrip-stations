@@ -264,7 +264,8 @@
 
         // Handle rate limit (429)
         if (resp.status === 429) {
-          btn.innerHTML = 'Limited to 1/day - retry tomorrow';
+          const data = await resp.json();
+          btn.innerHTML = data.error || 'Limited to 1/day - retry tomorrow';
           btn.classList.add('btn-warning');
           btn.disabled = true;
           setTimeout(() => {
