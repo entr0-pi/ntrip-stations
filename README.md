@@ -12,8 +12,10 @@ A web app to find the 5 nearest RTK2GO NTRIP correction stations from any locati
 - 📥 **CSV export** button to download the 5 nearest stations
 - 💾 SQLite database with refresh button
 - 🌙 Light/Dark theme toggle
+- 🎨 **Color-coded distance badges** (green/yellow/red) in results table with configurable thresholds
 - 🚦 **Dual-layer rate limiting** (browser + server) for Geoapify API protection
 - ⚙️ **Environment-based configuration** for all API keys and service settings
+- 🔄 **Timestamp-based rate limiting** with informative error messages showing time until next refresh
 
 ## Installation
 
@@ -36,6 +38,11 @@ GEOAPIFY_API_KEY=your_api_key_here
 # Rate limiting
 GEOAPIFY_API_RATE_LIMIT=5/second
 BROWSER_SEARCH_COOLDOWN_SECS=5
+REFRESH_DB_RATE_LIMIT=1/day
+
+# Distance badge thresholds (km)
+DISTANCE_BADGE_GREEN_KM=100    # Green badge for distances <= this value
+DISTANCE_BADGE_YELLOW_KM=300   # Yellow badge for distances <= this value (red beyond)
 
 # RTK2GO NTRIP server
 RTK2GO_HOST=rtk2go.com
@@ -79,6 +86,19 @@ The app includes comprehensive rate limiting to protect external APIs and resour
 - **Server-side:** Limited to 1 refresh per day per IP address to prevent excessive downloads
 
 Both search layers and the refresh limit are configurable via `.env` file. Rate limit format supports flexible intervals: `<count>/<unit>` where unit is `second`, `minute`, `hour`, or `day`.
+
+### Distance Badges
+
+Results table displays color-coded badges based on distance:
+- 🟢 **Green badge** (≤ 100 km): Nearby stations - closest match
+- 🟡 **Yellow badge** (100-300 km): Medium distance
+- 🔴 **Red badge** (> 300 km): Far stations
+
+Thresholds are fully customizable via `.env`:
+```bash
+DISTANCE_BADGE_GREEN_KM=100    # Change to adjust green threshold
+DISTANCE_BADGE_YELLOW_KM=300   # Change to adjust yellow threshold
+```
 
 ## Tech Stack
 
@@ -131,6 +151,8 @@ All service configurations are managed via environment variables in the `.env` f
 | `GEOAPIFY_API_RATE_LIMIT` | Search API request limit per time unit | `5/second` |
 | `REFRESH_DB_RATE_LIMIT` | Database refresh limit per time unit | `1/day` |
 | `BROWSER_SEARCH_COOLDOWN_SECS` | Button cooldown after search | `5` |
+| `DISTANCE_BADGE_GREEN_KM` | Distance threshold for green badge (nearby) | `100` |
+| `DISTANCE_BADGE_YELLOW_KM` | Distance threshold for yellow badge (medium) | `300` |
 | `RTK2GO_HOST` | NTRIP server hostname | `rtk2go.com` |
 | `RTK2GO_PORT` | NTRIP server port | `2101` |
 | `RTK2GO_TIMEOUT_SECS` | Socket connection timeout | `30` |

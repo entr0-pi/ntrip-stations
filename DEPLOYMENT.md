@@ -102,6 +102,14 @@ TRUSTED_HOSTS=10.0.0.1
 
 # Your actual Geoapify API key
 GEOAPIFY_API_KEY=your_actual_key_here
+
+# Rate limiting configuration
+GEOAPIFY_API_RATE_LIMIT=5/second
+REFRESH_DB_RATE_LIMIT=1/day
+
+# Distance badge thresholds (customize for your use case)
+DISTANCE_BADGE_GREEN_KM=100
+DISTANCE_BADGE_YELLOW_KM=300
 ```
 
 **Important:** Set `TRUSTED_HOSTS` to your reverse proxy server's IP address. If the proxy is on the same machine, use `127.0.0.1`.
