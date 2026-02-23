@@ -226,12 +226,28 @@ Check your reverse proxy's log files for request details:
 
 ### Update Application
 
+Pull the latest changes from the repository and reinstall dependencies:
+
 ```bash
 cd /opt/ntrip-stations
+
+# Pull latest code from main branch (as ntrip-app user)
 sudo -u ntrip-app git pull origin main
+
+# Reinstall/update Python dependencies in case requirements changed
 sudo -u ntrip-app venv/bin/pip install -r requirements.txt
+
+# Restart the service to load new code
 sudo systemctl restart ntrip-app
+
+# Verify the update was successful
+sudo systemctl status ntrip-app
 ```
+
+**Important:**
+- Always run `git pull` as the `ntrip-app` user (not root) to maintain proper file permissions
+- The `sudo -u ntrip-app` prefix ensures the cloned files are owned by `ntrip-app`, not root
+- If the pull fails due to local modifications, see the Troubleshooting section below
 
 ### Database Refresh
 
