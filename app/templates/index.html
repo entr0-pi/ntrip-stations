@@ -181,11 +181,11 @@
                 <td>{{ st.rank }}</td>
                 <td>
                   {% if st.dist_km <= DISTANCE_BADGE_GREEN_KM %}
-                    <div class="badge badge-success gap-2">{{ st.dist_km }} km</div>
+                    <div class="badge badge-success gap-1 text-xs">{{ st.dist_km }} km</div>
                   {% elif st.dist_km <= DISTANCE_BADGE_YELLOW_KM %}
-                    <div class="badge badge-warning gap-2">{{ st.dist_km }} km</div>
+                    <div class="badge badge-warning gap-1 text-xs">{{ st.dist_km }} km</div>
                   {% else %}
-                    <div class="badge badge-error gap-2">{{ st.dist_km }} km</div>
+                    <div class="badge badge-error gap-1 text-xs">{{ st.dist_km }} km</div>
                   {% endif %}
                 </td>
                 <td class="font-mono font-semibold">{{ st.mount }}</td>
