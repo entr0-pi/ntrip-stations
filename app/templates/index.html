@@ -99,11 +99,11 @@
           <div id="tab-address">
             <label class="form-control w-full">
               <div class="label"><span class="label-text">Address or place name</span></div>
-              <div class="flex gap-2">
+              <div class="flex flex-col gap-2 sm:flex-row">
                 <input type="text" name="address" placeholder="e.g. Montreal, Quebec"
-                       class="input input-bordered flex-1"
+                       class="input input-bordered w-full sm:flex-1"
                        value="{{ request.query_params.get('address', '') }}">
-                <select name="country_code" class="select select-bordered w-48">
+                <select name="country_code" class="select select-bordered w-full sm:w-48">
                   <option value="">All countries</option>
                   {% for c in countries %}
                   <option value="{{ c.code }}"{% if selected_country_code == c.code %} selected{% endif %}>{{ c.name }}</option>
