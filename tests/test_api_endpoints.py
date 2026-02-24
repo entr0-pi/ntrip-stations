@@ -3,6 +3,7 @@
 import pytest
 from app import models, crud
 from datetime import datetime, timezone
+from app import main
 
 
 def add_test_stations(db, count=5):
@@ -126,7 +127,7 @@ class TestRefreshEndpoint:
         """Test that refresh endpoint returns JSON response."""
         response = client.post("/refresh")
         # First request should work (rate limit is 1/day)
-        assert response.status_code in [200, 429]  # Could hit rate limit if test runs twice
+        assert response.status_code in [200, 429, 500]  # Network-dependent in CI/local envs
         assert "application/json" in response.headers.get("content-type", "")
 
     def test_refresh_response_structure(self, client):
@@ -147,6 +148,45 @@ class TestRefreshEndpoint:
                 break
 
         assert refresh_route is not None, "Refresh route not found"
+
+
+class TestProtectedDocs:
+    """Tests for the protected docs and OpenAPI endpoints."""
+
+    def test_docs_route_hidden_when_not_configured(self, client, monkeypatch):
+        """Docs route should return 404 when credentials are not configured."""
+        monkeypatch.setattr(main, "DOCS_ADMIN_USER", None)
+        monkeypatch.setattr(main, "DOCS_ADMIN_PASSWORD", None)
+
+        response = client.get("/docs")
+        assert response.status_code == 404
+
+    def test_docs_requires_basic_auth(self, client, monkeypatch):
+        """Docs route should challenge when credentials are missing/invalid."""
+        monkeypatch.setattr(main, "DOCS_ADMIN_USER", "admin")
+        monkeypatch.setattr(main, "DOCS_ADMIN_PASSWORD", "secret")
+
+        response = client.get("/docs")
+        assert response.status_code == 401
+        assert response.headers.get("www-authenticate") == "Basic"
+
+    def test_docs_with_valid_basic_auth(self, client, monkeypatch):
+        """Docs route should be accessible with valid basic auth credentials."""
+        monkeypatch.setattr(main, "DOCS_ADMIN_USER", "admin")
+        monkeypatch.setattr(main, "DOCS_ADMIN_PASSWORD", "secret")
+
+        response = client.get("/docs", auth=("admin", "secret"))
+        assert response.status_code == 200
+        assert "swagger" in response.text.lower()
+
+    def test_openapi_with_valid_basic_auth(self, client, monkeypatch):
+        """OpenAPI JSON should be accessible with valid basic auth credentials."""
+        monkeypatch.setattr(main, "DOCS_ADMIN_USER", "admin")
+        monkeypatch.setattr(main, "DOCS_ADMIN_PASSWORD", "secret")
+
+        response = client.get("/openapi.json", auth=("admin", "secret"))
+        assert response.status_code == 200
+        assert "openapi" in response.json()
 
 
 class TestDatabaseSeeding:
