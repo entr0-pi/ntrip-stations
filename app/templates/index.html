@@ -61,12 +61,6 @@
           <span class="text-warning" id="db-updated">DB is empty</span>
           {% endif %}
 
-          <!-- Refresh button -->
-          <button id="refresh-btn" class="btn btn-sm btn-outline btn-primary"
-                  onclick="refreshDB()">
-            Refresh DB
-          </button>
-
           <!-- Theme toggle (improved) -->
           <div class="ml-auto flex items-center gap-2 px-3 py-1.5 bg-base-200 rounded-lg">
             <span class="text-lg" id="theme-icon">🌙</span>
@@ -258,56 +252,6 @@
       checkbox.checked = currentTheme === 'cupcake';
     });
 
-    // ── Refresh DB ─────────────────────────────────────
-    async function refreshDB() {
-      const btn = document.getElementById('refresh-btn');
-      const countBadge = document.getElementById('db-count');
-      const updatedSpan = document.getElementById('db-updated');
-
-      btn.disabled = true;
-      btn.innerHTML = '<span class="loading loading-spinner loading-sm"></span> Fetching...';
-
-      try {
-        const resp = await fetch('/refresh', { method: 'POST' });
-
-        // Handle rate limit (429)
-        if (resp.status === 429) {
-          const data = await resp.json();
-          btn.innerHTML = data.error || 'Limited to 1/day - retry tomorrow';
-          btn.classList.add('btn-warning');
-          btn.disabled = true;
-          setTimeout(() => {
-            btn.innerHTML = 'Refresh DB';
-            btn.classList.remove('btn-warning');
-            btn.disabled = false;
-          }, 3000);
-          return;
-        }
-
-        if (!resp.ok) throw new Error(await resp.text());
-        const data = await resp.json();
-
-        // Patch DOM without full page reload
-        countBadge.textContent = data.count + ' stations in DB';
-        updatedSpan.textContent = 'Last updated: ' + new Date(data.last_updated).toUTCString();
-        updatedSpan.className = 'text-base-content/60';
-
-        btn.classList.remove('btn-outline');
-        btn.classList.add('btn-success');
-        btn.innerHTML = 'Done!';
-        setTimeout(() => {
-          btn.innerHTML = 'Refresh DB';
-          btn.classList.add('btn-outline');
-          btn.classList.remove('btn-success');
-          btn.disabled = false;
-        }, 2000);
-      } catch (err) {
-        btn.innerHTML = 'Error - retry';
-        btn.classList.add('btn-error');
-        btn.disabled = false;
-        console.error(err);
-      }
-    }
 
     // ── Download CSV ────────────────────────────────────
     function downloadCSV() {
