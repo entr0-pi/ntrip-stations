@@ -259,15 +259,51 @@ sudo systemctl status ntrip-app
 
 ### Database Refresh
 
-The app refreshes the NTRIP station database via the `/refresh` endpoint. Rate limiting prevents excessive downloads:
+The app refreshes the NTRIP station database via the `/refresh` endpoint.
+Rate limiting (database timestamp-based) prevents excessive downloads.
+Two optional authentication mechanisms are also available (see `.env` configuration).
+
+#### Calling `/refresh` without authentication (default)
 
 ```bash
-# Manual refresh via curl
+# No auth configured — endpoint is open
 curl -X POST https://example.com/refresh
-
-# Check current station count
-# This is visible in the web UI
 ```
+
+#### Calling `/refresh` with `ADMIN_TOKEN`
+
+If `ADMIN_TOKEN` is set in `.env`, you must supply the token in the request header:
+
+```bash
+curl -X POST https://example.com/refresh \
+     -H "X-Admin-Token: your_secret_token_here"
+```
+
+The server returns HTTP 401 if the token is missing or incorrect.
+
+#### Calling `/refresh` with `REFRESH_ALLOWED_IPS`
+
+If `REFRESH_ALLOWED_IPS` is set, only requests from the listed IPs are accepted.
+All other callers receive HTTP 403. No header is required for allowlisted IPs.
+
+#### Using both together (defense in depth)
+
+When both `ADMIN_TOKEN` and `REFRESH_ALLOWED_IPS` are set, a request must satisfy
+both checks simultaneously. Example:
+
+```bash
+curl -X POST https://example.com/refresh \
+     -H "X-Admin-Token: your_secret_token_here"
+# (caller's IP must also be in REFRESH_ALLOWED_IPS)
+```
+
+#### Generating a strong token
+
+```bash
+python3 -c "import secrets; print(secrets.token_hex(32))"
+```
+
+Copy the output into `ADMIN_TOKEN` in your `.env` file.
 
 ## Troubleshooting
 
@@ -347,6 +383,8 @@ htop
 - [ ] Logs monitored and rotation configured
 - [ ] Automatic updates enabled
 - [ ] Backup strategy in place for database
+- [ ] `ADMIN_TOKEN` set to a strong random value (or consciously left unset for open access)
+- [ ] `REFRESH_ALLOWED_IPS` restricted to known admin IPs (or consciously left unset)
 
 ## Performance Tuning
 

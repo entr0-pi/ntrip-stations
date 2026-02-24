@@ -1,5 +1,6 @@
 import asyncio
 import os
+import secrets
 from pathlib import Path
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
@@ -27,6 +28,14 @@ GEOAPIFY_API_RATE_LIMIT = os.getenv("GEOAPIFY_API_RATE_LIMIT", "10/minute")
 REFRESH_DB_RATE_LIMIT = os.getenv("REFRESH_DB_RATE_LIMIT", "1/day")
 DISTANCE_BADGE_GREEN_KM = int(os.getenv("DISTANCE_BADGE_GREEN_KM", "100"))
 DISTANCE_BADGE_YELLOW_KM = int(os.getenv("DISTANCE_BADGE_YELLOW_KM", "300"))
+
+# /refresh endpoint authentication (both optional; endpoint is open if unset)
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN")
+REFRESH_ALLOWED_IPS = (
+    [ip.strip() for ip in os.getenv("REFRESH_ALLOWED_IPS", "").split(",") if ip.strip()]
+    if os.getenv("REFRESH_ALLOWED_IPS")
+    else []
+)
 
 # Reverse proxy setup: trust X-Forwarded-For from these hosts
 # In production, set TRUSTED_HOSTS to your reverse proxy IP (e.g., "127.0.0.1" or internal proxy IPs)
@@ -199,6 +208,17 @@ async def refresh_db(request: Request, db: Session = Depends(get_db)):
     The blocking socket fetch runs in a thread pool executor so the event loop
     is never blocked. Returns JSON so the frontend can update the UI state.
     """
+    # ── Authentication guard ────────────────────────────────────────────────
+    if REFRESH_ALLOWED_IPS:
+        client_ip = get_client_ip(request)
+        if client_ip not in REFRESH_ALLOWED_IPS:
+            raise HTTPException(status_code=403, detail="Forbidden: IP not allowed")
+    if ADMIN_TOKEN:
+        provided_token = request.headers.get("X-Admin-Token", "")
+        if not secrets.compare_digest(provided_token, ADMIN_TOKEN):
+            raise HTTPException(status_code=401, detail="Unauthorized: invalid or missing X-Admin-Token")
+    # ────────────────────────────────────────────────────────────────────────
+
     from datetime import datetime, timezone, timedelta
 
     try:
