@@ -1,3 +1,14 @@
+"""RTK2GO NTRIP Station Finder - FastAPI Application
+
+This module defines the main FastAPI application, including:
+- HTML rendering routes for the web UI (index, search form)
+- Database refresh endpoint for syncing RTK2GO stations
+- OpenAPI documentation with HTTP Basic authentication
+- Rate limiting, middleware, and request lifecycle management
+
+The app uses SQLAlchemy for database operations and Jinja2 for templating.
+"""
+
 import asyncio
 import os
 import secrets
@@ -83,6 +94,14 @@ def authenticate_docs(credentials: HTTPBasicCredentials | None = Depends(securit
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """Manage FastAPI application lifecycle.
+
+    On startup:
+    - Creates database tables if they don't exist (SQLAlchemy models)
+    - Seeds the countries table from CSV (one-time initialization)
+
+    This runs once when the app starts and yields until shutdown.
+    """
     # Create tables on startup if they don't exist
     models.Base.metadata.create_all(bind=engine)
     # Seed countries table from CSV
@@ -95,6 +114,12 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="RTK2GO Station Finder",
+    version="1.0.0",
+    description="Find the nearest RTK2GO NTRIP stations by address or coordinates.",
+    contact={
+        "name": "NTRIP Stations",
+        "url": "https://github.com/entr0-pi/ntrip-stations",
+    },
     lifespan=lifespan,
     docs_url=None,
     redoc_url=None,
@@ -131,7 +156,21 @@ async def openapi(_: None = Depends(authenticate_docs)):
 # ── Route 1: Main page ──────────────────────────────────────────────────────
 
 @app.get("/", response_class=HTMLResponse)
-async def index(request: Request, db: Session = Depends(get_db)):
+async def index(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Render the RTK2GO Station Finder home page.
+
+    Displays the search form with:
+    - Total station count in the database
+    - Last update timestamp
+    - Country selector dropdown
+    - Address input and coordinate input fields
+
+    Returns:
+        Rendered Jinja2 HTML template with form and metadata.
+    """
     count = crud.get_station_count(db)
     last_updated = crud.get_last_updated(db)
     return templates.TemplateResponse("index.html", {
@@ -150,6 +189,22 @@ async def index(request: Request, db: Session = Depends(get_db)):
 @app.post("/search", response_class=HTMLResponse)
 @limiter.limit(GEOAPIFY_API_RATE_LIMIT)
 async def search(request: Request, db: Session = Depends(get_db)):
+    """Search for nearest RTK2GO NTRIP stations by address or coordinates.
+
+    Form parameters:
+        address: Address string to geocode (e.g., "Paris, France")
+        lat: Latitude in decimal degrees (optional if address provided)
+        lon: Longitude in decimal degrees (optional if address provided)
+        country_code: ISO 3166-1 alpha-2 code to restrict geocoding results
+
+    Rate limiting:
+        Applied per IP address via GEOAPIFY_API_RATE_LIMIT (default: 10/minute).
+        Uses Geoapify API for address-to-coordinates conversion.
+
+    Returns:
+        Rendered HTML template with up to 5 nearest stations and their details,
+        or an error message if validation/lookup fails.
+    """
     form = await request.form()
     address = form.get("address", "").strip()
     lat_str = form.get("lat", "").strip()
@@ -159,6 +214,7 @@ async def search(request: Request, db: Session = Depends(get_db)):
     count = crud.get_station_count(db)
     last_updated = crud.get_last_updated(db)
 
+    # Check if database is populated
     if count == 0:
         return templates.TemplateResponse("index.html", {
             "request": request,
@@ -170,15 +226,17 @@ async def search(request: Request, db: Session = Depends(get_db)):
             "error": "Database is empty. Please refresh the station list first.",
         })
 
-    # Resolve coordinates
+    # ── Resolve coordinates from address or direct input ──────────────────
     resolved_address = None
     try:
         if address:
             # Geocode runs in executor to avoid blocking the event loop
+            # (Geoapify API calls are blocking I/O, so we run them in a thread pool)
             lat, lon, resolved_address = await asyncio.get_event_loop().run_in_executor(
                 None, lambda: geocode(address, country_code or None)
             )
         elif lat_str and lon_str:
+            # User provided direct coordinates
             lat, lon = float(lat_str), float(lon_str)
         else:
             raise ValueError("Please enter an address or coordinates.")
@@ -193,7 +251,7 @@ async def search(request: Request, db: Session = Depends(get_db)):
             "error": str(e),
         })
 
-    # Query DB for nearest stations
+    # ── Find nearest stations using haversine distance ────────────────────
     all_stations = crud.get_all_stations_as_dicts(db)
     nearest = find_nearest(lat, lon, all_stations, n=5)
 
@@ -208,7 +266,7 @@ async def search(request: Request, db: Session = Depends(get_db)):
             "error": "No stations found near the specified location.",
         })
 
-    # Build serialisable result for the template
+    # ── Build result object for template rendering ──────────────────────
     result = {
         "lat": lat,
         "lon": lon,
@@ -267,12 +325,12 @@ async def refresh_db(request: Request, db: Session = Depends(get_db)):
     from datetime import datetime, timezone, timedelta
 
     try:
-        # Check if enough time has passed since last update
+        # ── Rate limiting: Check minimum interval since last update ──────────
         last_updated = crud.get_last_updated(db)
         now = datetime.now(timezone.utc)
 
         if last_updated:
-            # Parse REFRESH_DB_RATE_LIMIT (e.g., "1/day")
+            # Parse REFRESH_DB_RATE_LIMIT format (e.g., "1/day", "3/hour")
             rate_parts = REFRESH_DB_RATE_LIMIT.split("/")
             if len(rate_parts) == 2:
                 count_str, unit = rate_parts
@@ -281,7 +339,7 @@ async def refresh_db(request: Request, db: Session = Depends(get_db)):
                 except ValueError:
                     count = 1
 
-                # Calculate minimum time between refreshes
+                # Convert rate limit unit to timedelta
                 if unit == "day":
                     min_interval = timedelta(days=count)
                 elif unit == "hour":
@@ -293,7 +351,7 @@ async def refresh_db(request: Request, db: Session = Depends(get_db)):
                 else:
                     min_interval = timedelta(days=1)
 
-                # Check if enough time has passed
+                # Enforce rate limit: reject if not enough time has passed
                 time_since_update = now - last_updated
                 if time_since_update < min_interval:
                     hours_remaining = (min_interval - time_since_update).total_seconds() / 3600
@@ -305,7 +363,9 @@ async def refresh_db(request: Request, db: Session = Depends(get_db)):
                         status_code=429,
                     )
 
-        # Perform the refresh
+        # ── Fetch and parse RTK2GO sourcetable ──────────────────────────────
+        # fetch_sourcetable() makes a raw socket request (blocking I/O)
+        # so we run it in a thread executor to avoid blocking the event loop
         loop = asyncio.get_event_loop()
         raw = await loop.run_in_executor(None, fetch_sourcetable)
         station_dicts = parse_sourcetable(raw)

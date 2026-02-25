@@ -1,4 +1,24 @@
 """NTRIP station discovery and geolocation service.
+
+This module provides core functionality for finding RTK2GO NTRIP stations:
+
+1. fetch_sourcetable(): Fetches the live NTRIP sourcetable from rtk2go.com:2101
+   via raw TCP socket request (blocking I/O, run in executor).
+
+2. parse_sourcetable(): Parses the raw HTTP response and extracts STR (station)
+   records into a list of dictionaries.
+
+3. haversine(): Computes great-circle distance between two lat/lon points
+   using the haversine formula. Returns distance in kilometers.
+
+4. find_nearest(): Finds the N nearest stations to a given location using
+   haversine distance and returns sorted (distance, station) tuples.
+
+5. geocode(): Converts an address string to (lat, lon, display_name) using
+   the Geoapify API. Optionally restricted to a country code.
+
+All configuration (API keys, timeouts, hosts) is loaded from environment
+variables in .env.
 """
 
 import socket
