@@ -61,7 +61,7 @@ crontab -e
 Add:
 
 ```cron
-0 2 * * * /opt/ntrip-stations/ops/cron/refresh-db.sh
+0 22 * * * /opt/ntrip-stations/ops/cron/refresh-db.sh
 ```
 
 ## Important app settings
