@@ -3,6 +3,7 @@
 A web app to find the 5 nearest RTK2GO NTRIP correction stations from any location. Search by address or coordinates, view results on an interactive map.
 
 🌐 **[See it live!](https://rtk2go.entr0-pi.com)** 🚀
+API key = 7l33761epAHB17jPbQyKOBElQ3IFiaznmK9CgADSfwzzFdVL7Yw83SrK3wToTuNE
 
 ## Features
 
