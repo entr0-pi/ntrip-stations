@@ -61,12 +61,17 @@
           <span class="text-warning" id="db-updated">DB is empty</span>
           {% endif %}
 
-          <!-- Theme toggle (improved) -->
-          <div class="ml-auto flex items-center gap-2 px-3 py-1.5 bg-base-200 rounded-lg">
-            <span class="text-lg" id="theme-icon">🌙</span>
-            <input type="checkbox" id="theme-checkbox" class="toggle toggle-sm"
-                   onchange="toggleTheme()" title="Toggle theme">
-            <span class="text-lg">☀️</span>
+          <!-- Theme toggle + logout -->
+          <div class="ml-auto flex items-center gap-3">
+            <div class="flex items-center gap-2 px-3 py-1.5 bg-base-200 rounded-lg">
+              <span class="text-lg" id="theme-icon">🌙</span>
+              <input type="checkbox" id="theme-checkbox" class="toggle toggle-sm"
+                     onchange="toggleTheme()" title="Toggle theme">
+              <span class="text-lg">☀️</span>
+            </div>
+            <form method="post" action="/logout">
+              <button type="submit" class="btn btn-xs btn-ghost">Logout</button>
+            </form>
           </div>
         </div>
       </div>
@@ -401,6 +406,11 @@
           method: 'POST',
           body: formData
         });
+
+        if (response.status === 401) {
+          window.location.href = '/login';
+          return;
+        }
 
         if (response.status === 429) {
           // Rate limit exceeded - show message and block with countdown

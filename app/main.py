@@ -12,11 +12,13 @@ The app uses SQLAlchemy for database operations and Jinja2 for templating.
 import asyncio
 import os
 import secrets
+import jwt
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request, Depends, HTTPException, status
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI, Request, Depends, Form, HTTPException, status
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
@@ -38,10 +40,17 @@ load_dotenv()
 APP_DIR = Path(__file__).parent
 
 # Configuration from .env
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 GEOAPIFY_API_RATE_LIMIT = os.getenv("GEOAPIFY_API_RATE_LIMIT", "10/minute")
 REFRESH_DB_RATE_LIMIT = os.getenv("REFRESH_DB_RATE_LIMIT", "1/day")
 DISTANCE_BADGE_GREEN_KM = int(os.getenv("DISTANCE_BADGE_GREEN_KM", "100"))
 DISTANCE_BADGE_YELLOW_KM = int(os.getenv("DISTANCE_BADGE_YELLOW_KM", "300"))
+
+# JWT / login authentication
+API_KEY = os.getenv("API_KEY", "")
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "")
+_JWT_ALGORITHM = "HS256"
+_JWT_EXPIRE_MINUTES = 15
 
 # /refresh endpoint authentication (both optional; endpoint is open if unset)
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN")
@@ -68,6 +77,30 @@ def get_client_ip(request: Request) -> str:
 
 limiter = Limiter(key_func=get_client_ip)
 security = HTTPBasic(auto_error=False)
+
+
+# ── JWT helpers ─────────────────────────────────────────────────────────────
+
+def _create_jwt() -> str:
+    """Issue a short-lived JWT (15 min)."""
+    exp = datetime.now(timezone.utc) + timedelta(minutes=_JWT_EXPIRE_MINUTES)
+    return jwt.encode({"exp": exp}, JWT_SECRET_KEY, algorithm=_JWT_ALGORITHM)
+
+
+def _validate_jwt(request: Request) -> bool:
+    """Return True if the request carries a valid JWT cookie."""
+    token = request.cookies.get("jwt", "")
+    try:
+        jwt.decode(token, JWT_SECRET_KEY, algorithms=[_JWT_ALGORITHM])
+        return True
+    except Exception:
+        return False
+
+
+async def require_jwt(request: Request):
+    """FastAPI dependency: raises HTTP 401 if JWT cookie is missing or invalid."""
+    if not _validate_jwt(request):
+        raise HTTPException(status_code=401, detail="Unauthorized")
 
 
 def authenticate_docs(credentials: HTTPBasicCredentials | None = Depends(security)):
@@ -155,6 +188,44 @@ async def openapi(_: None = Depends(authenticate_docs)):
 
 # ── Route 1: Main page ──────────────────────────────────────────────────────
 
+@app.get("/login", response_class=HTMLResponse, include_in_schema=False)
+async def login_page(request: Request):
+    """Render the login page. Redirects to / if already authenticated."""
+    if _validate_jwt(request):
+        return RedirectResponse("/", status_code=302)
+    return templates.TemplateResponse("login.html", {"request": request})
+
+
+@app.post("/login", include_in_schema=False)
+async def login(request: Request, api_key: str = Form(...)):
+    """Validate API key and issue a JWT cookie. Redirects to / on success."""
+    if not API_KEY or not secrets.compare_digest(api_key, API_KEY):
+        return templates.TemplateResponse(
+            "login.html",
+            {"request": request, "error": "Invalid API key"},
+            status_code=401,
+        )
+    token = _create_jwt()
+    resp = RedirectResponse("/", status_code=302)
+    resp.set_cookie(
+        "jwt",
+        token,
+        httponly=True,
+        samesite="lax",
+        max_age=_JWT_EXPIRE_MINUTES * 60,
+        secure=(ENVIRONMENT == "production"),
+    )
+    return resp
+
+
+@app.post("/logout", include_in_schema=False)
+async def logout():
+    """Clear the JWT cookie and redirect to the login page."""
+    resp = RedirectResponse("/login", status_code=302)
+    resp.delete_cookie("jwt")
+    return resp
+
+
 @app.get("/", response_class=HTMLResponse)
 async def index(
     request: Request,
@@ -171,6 +242,8 @@ async def index(
     Returns:
         Rendered Jinja2 HTML template with form and metadata.
     """
+    if not _validate_jwt(request):
+        return RedirectResponse("/login", status_code=302)
     count = crud.get_station_count(db)
     last_updated = crud.get_last_updated(db)
     return templates.TemplateResponse("index.html", {
@@ -186,7 +259,7 @@ async def index(
 
 # ── Route 2: Search (POST) ──────────────────────────────────────────────────
 
-@app.post("/search", response_class=HTMLResponse)
+@app.post("/search", response_class=HTMLResponse, dependencies=[Depends(require_jwt)])
 @limiter.limit(GEOAPIFY_API_RATE_LIMIT)
 async def search(request: Request, db: Session = Depends(get_db)):
     """Search for nearest RTK2GO NTRIP stations by address or coordinates.
@@ -321,8 +394,6 @@ async def refresh_db(request: Request, db: Session = Depends(get_db)):
         if not secrets.compare_digest(provided_token, ADMIN_TOKEN):
             raise HTTPException(status_code=401, detail="Unauthorized: invalid or missing X-Admin-Token")
     # ────────────────────────────────────────────────────────────────────────
-
-    from datetime import datetime, timezone, timedelta
 
     try:
         # ── Rate limiting: Check minimum interval since last update ──────────

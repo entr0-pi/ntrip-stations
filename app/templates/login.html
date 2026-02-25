@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="cupcake">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RTK2GO Station Finder — Login</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- DaisyUI -->
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4/dist/full.min.css" rel="stylesheet" />
+
+    <script>
+      (function() {
+        const savedTheme = localStorage.getItem('theme');
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const theme = savedTheme || (prefersDark ? 'dim' : 'cupcake');
+        document.documentElement.setAttribute('data-theme', theme);
+      })();
+    </script>
+</head>
+<body class="bg-base-200 min-h-screen flex items-center justify-center p-4">
+
+  <div class="card bg-base-100 shadow w-full max-w-sm">
+    <div class="card-body gap-4">
+
+      <h1 class="card-title text-2xl justify-center">RTK2GO Station Finder</h1>
+      <p class="text-base-content/60 text-center text-sm">Enter your API key to continue</p>
+
+      {% if error %}
+      <div class="alert alert-error text-sm py-2">
+        <span>{{ error }}</span>
+      </div>
+      {% endif %}
+
+      <form method="post" action="/login" class="flex flex-col gap-3">
+        <label class="form-control w-full">
+          <div class="label"><span class="label-text">API Key</span></div>
+          <input type="password" name="api_key" placeholder="Enter your API key"
+                 class="input input-bordered w-full" autofocus autocomplete="current-password">
+        </label>
+        <button type="submit" class="btn btn-primary w-full mt-1">Login</button>
+      </form>
+
+    </div>
+  </div>
+
+</body>
+</html>
