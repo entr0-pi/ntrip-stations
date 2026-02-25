@@ -52,6 +52,10 @@ RTK2GO_MAX_BYTES_MB=4
 
 # Earth radius (km) - used for distance calculations
 EARTH_RADIUS_KM=6371.0
+
+# Optional docs protection (if unset, /docs and /openapi.json stay hidden)
+DOCS_ADMIN_USER=admin
+DOCS_ADMIN_PASSWORD=change-me
 ```
 
 Get a free Geoapify API key at https://www.geoapify.com/
@@ -158,6 +162,8 @@ All service configurations are managed via environment variables in the `.env` f
 | `RTK2GO_TIMEOUT_SECS` | Socket connection timeout | `30` |
 | `RTK2GO_MAX_BYTES_MB` | Max sourcetable download size | `4` |
 | `EARTH_RADIUS_KM` | Earth radius for distance calculations | `6371.0` |
+| `DOCS_ADMIN_USER` | Username for protected `/docs` and `/openapi.json` | unset |
+| `DOCS_ADMIN_PASSWORD` | Password for protected `/docs` and `/openapi.json` | unset |
 
 Rate limit format supports: `<count>/<unit>` where unit is `second`, `minute`, `hour`, or `day`
 - Examples: `5/second`, `10/minute`, `100/hour`

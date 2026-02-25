@@ -4,10 +4,13 @@ import secrets
 from pathlib import Path
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request, Depends, HTTPException
+from fastapi import FastAPI, Request, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.openapi.utils import get_openapi
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from sqlalchemy.orm import Session
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -31,6 +34,8 @@ DISTANCE_BADGE_YELLOW_KM = int(os.getenv("DISTANCE_BADGE_YELLOW_KM", "300"))
 
 # /refresh endpoint authentication (both optional; endpoint is open if unset)
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN")
+DOCS_ADMIN_USER = os.getenv("DOCS_ADMIN_USER")
+DOCS_ADMIN_PASSWORD = os.getenv("DOCS_ADMIN_PASSWORD")
 REFRESH_ALLOWED_IPS = (
     [ip.strip() for ip in os.getenv("REFRESH_ALLOWED_IPS", "").split(",") if ip.strip()]
     if os.getenv("REFRESH_ALLOWED_IPS")
@@ -51,6 +56,30 @@ def get_client_ip(request: Request) -> str:
     return request.client.host
 
 limiter = Limiter(key_func=get_client_ip)
+security = HTTPBasic(auto_error=False)
+
+
+def authenticate_docs(credentials: HTTPBasicCredentials | None = Depends(security)):
+    """HTTP Basic auth guard for OpenAPI and docs routes."""
+    if not DOCS_ADMIN_USER or not DOCS_ADMIN_PASSWORD:
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Unauthorized",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+
+    is_user_ok = secrets.compare_digest(credentials.username, DOCS_ADMIN_USER)
+    is_pass_ok = secrets.compare_digest(credentials.password, DOCS_ADMIN_PASSWORD)
+
+    if not (is_user_ok and is_pass_ok):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Unauthorized",
+            headers={"WWW-Authenticate": "Basic"},
+        )
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -64,7 +93,13 @@ async def lifespan(app: FastAPI):
         db.close()
     yield
 
-app = FastAPI(title="RTK2GO Station Finder", lifespan=lifespan)
+app = FastAPI(
+    title="RTK2GO Station Finder",
+    lifespan=lifespan,
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -81,6 +116,16 @@ templates.env.globals["BROWSER_SEARCH_COOLDOWN_SECS"] = int(
 )
 templates.env.globals["DISTANCE_BADGE_GREEN_KM"] = DISTANCE_BADGE_GREEN_KM
 templates.env.globals["DISTANCE_BADGE_YELLOW_KM"] = DISTANCE_BADGE_YELLOW_KM
+
+
+@app.get("/docs", include_in_schema=False)
+async def docs(_: None = Depends(authenticate_docs)):
+    return get_swagger_ui_html(openapi_url="/openapi.json", title=f"{app.title} Docs")
+
+
+@app.get("/openapi.json", include_in_schema=False)
+async def openapi(_: None = Depends(authenticate_docs)):
+    return get_openapi(title=app.title, version="1.0.0", routes=app.routes)
 
 
 # ── Route 1: Main page ──────────────────────────────────────────────────────
