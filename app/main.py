@@ -10,6 +10,7 @@ The app uses SQLAlchemy for database operations and Jinja2 for templating.
 """
 
 import asyncio
+import logging
 import os
 import secrets
 import jwt
@@ -26,7 +27,6 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from sqlalchemy.orm import Session
 from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 from app.database import engine, get_db, SessionLocal
@@ -35,6 +35,9 @@ from app.ntrip import fetch_sourcetable, parse_sourcetable, find_nearest, geocod
 
 # Load environment variables
 load_dotenv()
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 # Get absolute path to app directory for templates
 APP_DIR = Path(__file__).parent
@@ -130,11 +133,18 @@ async def lifespan(app: FastAPI):
     """Manage FastAPI application lifecycle.
 
     On startup:
+    - Validates required secrets (API_KEY, JWT_SECRET_KEY)
     - Creates database tables if they don't exist (SQLAlchemy models)
     - Seeds the countries table from CSV (one-time initialization)
 
     This runs once when the app starts and yields until shutdown.
     """
+    # ── Validate required secrets ───────────────────────────────────────────────
+    if not API_KEY or len(API_KEY) < 16:
+        raise RuntimeError("API_KEY must be set to at least 16 characters. Generate with: python3 -c \"import secrets; print(secrets.token_hex(8))\"")
+    if not JWT_SECRET_KEY or len(JWT_SECRET_KEY) < 32:
+        raise RuntimeError("JWT_SECRET_KEY must be set to at least 32 characters. Generate with: python3 -c \"import secrets; print(secrets.token_hex(16))\"")
+
     # Create tables on startup if they don't exist
     models.Base.metadata.create_all(bind=engine)
     # Seed countries table from CSV
@@ -193,16 +203,18 @@ async def login_page(request: Request):
     """Render the login page. Redirects to / if already authenticated."""
     if _validate_jwt(request):
         return RedirectResponse("/", status_code=302)
-    return templates.TemplateResponse("login.html", {"request": request})
+    return templates.TemplateResponse(request, "login.html", {})
 
 
 @app.post("/login", include_in_schema=False)
+@limiter.limit("30/minute")
 async def login(request: Request, api_key: str = Form(default="")):
     """Validate API key and issue a JWT cookie. Redirects to / on success."""
     if not API_KEY or not secrets.compare_digest(api_key, API_KEY):
         return templates.TemplateResponse(
+            request,
             "login.html",
-            {"request": request, "error": "Invalid API key"},
+            {"error": "Invalid API key"},
             status_code=401,
         )
     token = _create_jwt()
@@ -222,7 +234,8 @@ async def login(request: Request, api_key: str = Form(default="")):
 async def logout():
     """Clear the JWT cookie and redirect to the login page."""
     resp = RedirectResponse("/login", status_code=302)
-    resp.delete_cookie("jwt")
+    resp.delete_cookie("jwt", httponly=True, samesite="lax",
+                       secure=(ENVIRONMENT == "production"))
     return resp
 
 
@@ -246,8 +259,7 @@ async def index(
         return RedirectResponse("/login", status_code=302)
     count = crud.get_station_count(db)
     last_updated = crud.get_last_updated(db)
-    return templates.TemplateResponse("index.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "index.html", {
         "station_count": count,
         "last_updated": last_updated,
         "countries": crud.get_all_countries(db),
@@ -289,8 +301,7 @@ async def search(request: Request, db: Session = Depends(get_db)):
 
     # Check if database is populated
     if count == 0:
-        return templates.TemplateResponse("index.html", {
-            "request": request,
+        return templates.TemplateResponse(request, "index.html", {
             "station_count": count,
             "last_updated": last_updated,
             "countries": crud.get_all_countries(db),
@@ -305,7 +316,7 @@ async def search(request: Request, db: Session = Depends(get_db)):
         if address:
             # Geocode runs in executor to avoid blocking the event loop
             # (Geoapify API calls are blocking I/O, so we run them in a thread pool)
-            lat, lon, resolved_address = await asyncio.get_event_loop().run_in_executor(
+            lat, lon, resolved_address = await asyncio.get_running_loop().run_in_executor(
                 None, lambda: geocode(address, country_code or None)
             )
         elif lat_str and lon_str:
@@ -314,8 +325,7 @@ async def search(request: Request, db: Session = Depends(get_db)):
         else:
             raise ValueError("Please enter an address or coordinates.")
     except ValueError as e:
-        return templates.TemplateResponse("index.html", {
-            "request": request,
+        return templates.TemplateResponse(request, "index.html", {
             "station_count": count,
             "last_updated": last_updated,
             "countries": crud.get_all_countries(db),
@@ -329,8 +339,7 @@ async def search(request: Request, db: Session = Depends(get_db)):
     nearest = find_nearest(lat, lon, all_stations, n=5)
 
     if not nearest:
-        return templates.TemplateResponse("index.html", {
-            "request": request,
+        return templates.TemplateResponse(request, "index.html", {
             "station_count": count,
             "last_updated": last_updated,
             "countries": crud.get_all_countries(db),
@@ -363,8 +372,7 @@ async def search(request: Request, db: Session = Depends(get_db)):
         ],
     }
 
-    return templates.TemplateResponse("index.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "index.html", {
         "station_count": count,
         "last_updated": last_updated,
         "countries": crud.get_all_countries(db),
@@ -437,8 +445,7 @@ async def refresh_db(request: Request, db: Session = Depends(get_db)):
         # ── Fetch and parse RTK2GO sourcetable ──────────────────────────────
         # fetch_sourcetable() makes a raw socket request (blocking I/O)
         # so we run it in a thread executor to avoid blocking the event loop
-        loop = asyncio.get_event_loop()
-        raw = await loop.run_in_executor(None, fetch_sourcetable)
+        raw = await asyncio.get_running_loop().run_in_executor(None, fetch_sourcetable)
         station_dicts = parse_sourcetable(raw)
         inserted = crud.replace_all_stations(db, station_dicts)
         last_updated = crud.get_last_updated(db)
@@ -448,4 +455,5 @@ async def refresh_db(request: Request, db: Session = Depends(get_db)):
             "last_updated": last_updated.isoformat() if last_updated else None,
         })
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Refresh failed")
+        raise HTTPException(status_code=500, detail="Failed to refresh station data")

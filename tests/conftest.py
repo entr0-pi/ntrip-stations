@@ -56,6 +56,14 @@ def client(temp_db):
     app.dependency_overrides.clear()
 
 
+@pytest.fixture(autouse=True)
+def disable_rate_limit_for_tests(monkeypatch):
+    """Disable rate limiting during tests to avoid stateful issues."""
+    from app import main
+    # Replace the limit decorator with a no-op decorator
+    monkeypatch.setattr(main.limiter, "limit", lambda *args, **kwargs: lambda f: f)
+
+
 @pytest.fixture
 def auth_client(client, monkeypatch):
     """Test client pre-authenticated with a valid JWT cookie."""

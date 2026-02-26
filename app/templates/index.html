@@ -416,12 +416,12 @@
           // Rate limit exceeded - show message and block with countdown
           alertMsg.textContent = 'Too many requests. Please wait at least 1 second before trying again.';
           alertDiv.classList.remove('hidden');
-          rateLimitResetTime = Date.now() + 2000;
+          rateLimitResetTime = Date.now() + (BROWSER_COOLDOWN * 1000);
           btn.disabled = true;
           btn.textContent = 'Rate Limited - Wait...';
 
           // Show countdown for rate limit
-          let cooldown = 2;
+          let cooldown = BROWSER_COOLDOWN;
           const timer = setInterval(() => {
             cooldown--;
             if (cooldown <= 0) {

@@ -132,8 +132,10 @@ class TestRefreshEndpoint:
         assert response.status_code in [200, 429, 500]  # Network-dependent in CI/local envs
         assert "application/json" in response.headers.get("content-type", "")
 
-    def test_refresh_response_structure(self, client):
+    def test_refresh_response_structure(self, client, monkeypatch):
         """Test that refresh returns appropriate response structure."""
+        monkeypatch.setattr(main, "ADMIN_TOKEN", None)
+        monkeypatch.setattr(main, "REFRESH_ALLOWED_IPS", [])
         response = client.post("/refresh")
         data = response.json()
         # Response should have either ok field, detail field (error), or error field (rate limit)
