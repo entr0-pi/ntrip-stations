@@ -4,7 +4,7 @@ A web app to find the 5 nearest RTK2GO NTRIP correction stations from any locati
 
 🌐 **[See it live!](https://rtk2go.entr0-pi.com)** 🚀
 
-API key = 7l33761epAHB17jPbQyKOBElQ3IFiaznmK9CgADSfwzzFdVL7Yw83SrK3wToTuNE
+**API key** — See [examples/API_KEY.md](examples/API_KEY.md)
 
 ## Features
 
@@ -31,36 +31,57 @@ pip install -r requirements.txt
 
 ### 2. Configure environment
 
-Create a `.env` file in the project root with your Geoapify API key:
+Create a `.env` file in the project root:
 
 ```bash
-# Geocoding API (Geoapify)
+# ============================================================================
+# Authentication (required for login)
+# ============================================================================
+API_KEY=7l33761epAHB17jPbQyKOBElQ3IFiaznmK9CgADSfwzzFdVL7Yw83SrK3wToTuNE
+JWT_SECRET_KEY=generate-a-random-secret-key-here
+
+# Generate a strong JWT_SECRET_KEY:
+# python3 -c "import secrets; print(secrets.token_hex(32))"
+
+# ============================================================================
+# Geocoding API (Geoapify) - required for address searches
+# ============================================================================
 GEOAPIFY_API_KEY=your_api_key_here
 
+# ============================================================================
 # Rate limiting
+# ============================================================================
 GEOAPIFY_API_RATE_LIMIT=5/second
 BROWSER_SEARCH_COOLDOWN_SECS=5
 REFRESH_DB_RATE_LIMIT=1/day
 
+# ============================================================================
 # Distance badge thresholds (km)
+# ============================================================================
 DISTANCE_BADGE_GREEN_KM=100    # Green badge for distances <= this value
 DISTANCE_BADGE_YELLOW_KM=300   # Yellow badge for distances <= this value (red beyond)
 
+# ============================================================================
 # RTK2GO NTRIP server
+# ============================================================================
 RTK2GO_HOST=rtk2go.com
 RTK2GO_PORT=2101
 RTK2GO_TIMEOUT_SECS=30
 RTK2GO_MAX_BYTES_MB=4
 
-# Earth radius (km) - used for distance calculations
-EARTH_RADIUS_KM=6371.0
+# ============================================================================
+# Other settings
+# ============================================================================
+EARTH_RADIUS_KM=6371.0         # Earth radius (km) - used for distance calculations
 
 # Optional docs protection (if unset, /docs and /openapi.json stay hidden)
 DOCS_ADMIN_USER=admin
 DOCS_ADMIN_PASSWORD=change-me
 ```
 
-Get a free Geoapify API key at https://www.geoapify.com/
+**API key:** See [examples/API_KEY.md](examples/API_KEY.md)
+
+**Geoapify key:** Get a free API key at https://www.geoapify.com/
 
 ### 3. Run the app
 
