@@ -197,8 +197,6 @@ location / {
 
 Configure SSL/TLS at your reverse proxy level (recommended for centralized certificate management).
 
-If you need certificate management advice, see the `DEPLOYMENT.md` file in version control for Let's Encrypt examples.
-
 ## Step 6: Rate Limiting Behind Proxy
 
 The app is configured to read `X-Forwarded-For` header to extract the real client IP for rate limiting.
@@ -258,6 +256,8 @@ sudo systemctl status ntrip-app
 - If the pull fails due to local modifications, see the Troubleshooting section below
 
 ### Database Refresh
+
+Use the cron helper script in `ops/cron/refresh-db.sh` and see `ops/cron/README.md` for setup details.
 
 The app refreshes the NTRIP station database via the `/refresh` endpoint.
 Rate limiting (database timestamp-based) prevents excessive downloads.

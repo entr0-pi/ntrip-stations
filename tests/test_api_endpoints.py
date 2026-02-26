@@ -29,27 +29,27 @@ def add_test_stations(db, count=5):
 class TestIndexEndpoint:
     """Tests for the / (index) endpoint."""
 
-    def test_index_returns_200(self, client):
+    def test_index_returns_200(self, auth_client):
         """Test that index page returns 200 status."""
-        response = client.get("/")
+        response = auth_client.get("/")
         assert response.status_code == 200
 
-    def test_index_has_form(self, client):
+    def test_index_has_form(self, auth_client):
         """Test that index page contains form elements."""
-        response = client.get("/")
+        response = auth_client.get("/")
         assert 'method="post"' in response.text or "form" in response.text.lower()
         assert "submit" in response.text.lower() or "button" in response.text.lower()
 
-    def test_index_has_country_dropdown(self, client):
+    def test_index_has_country_dropdown(self, auth_client):
         """Test that index page has country dropdown."""
-        response = client.get("/")
+        response = auth_client.get("/")
         assert "country" in response.text.lower()
 
-    def test_index_shows_station_count(self, client, temp_db):
+    def test_index_shows_station_count(self, auth_client, temp_db):
         """Test that index page displays station count."""
         add_test_stations(temp_db, 3)
 
-        response = client.get("/")
+        response = auth_client.get("/")
         assert response.status_code == 200
         # Should show 0 count initially due to fresh database in test
         assert "station" in response.text.lower()
@@ -58,9 +58,9 @@ class TestIndexEndpoint:
 class TestSearchEndpoint:
     """Tests for the /search endpoint."""
 
-    def test_search_with_invalid_input(self, client, temp_db):
+    def test_search_with_invalid_input(self, auth_client, temp_db):
         """Test that search requires valid input."""
-        response = client.post("/search", data={
+        response = auth_client.post("/search", data={
             "address": "",
             "lat": "",
             "lon": "",
@@ -70,11 +70,11 @@ class TestSearchEndpoint:
         # Should have error message
         assert "error" in response.text.lower() or "address" in response.text.lower()
 
-    def test_search_with_valid_coordinates(self, client, temp_db):
+    def test_search_with_valid_coordinates(self, auth_client, temp_db):
         """Test search with valid lat/lon coordinates."""
         add_test_stations(temp_db, 5)
 
-        response = client.post("/search", data={
+        response = auth_client.post("/search", data={
             "address": "",
             "lat": "40.7128",
             "lon": "-74.0060",
@@ -84,9 +84,9 @@ class TestSearchEndpoint:
         # Should have result or nearest station info
         assert "TEST" in response.text or "nearest" in response.text.lower()
 
-    def test_search_with_invalid_coordinates(self, client, temp_db):
+    def test_search_with_invalid_coordinates(self, auth_client, temp_db):
         """Test that invalid coordinates are rejected."""
-        response = client.post("/search", data={
+        response = auth_client.post("/search", data={
             "address": "",
             "lat": "not_a_number",
             "lon": "-74.0060",
@@ -96,9 +96,9 @@ class TestSearchEndpoint:
         # Should have an error
         assert "error" in response.text.lower()
 
-    def test_search_with_empty_database(self, client):
+    def test_search_with_empty_database(self, auth_client):
         """Test search when database is empty."""
-        response = client.post("/search", data={
+        response = auth_client.post("/search", data={
             "address": "New York",
             "lat": "",
             "lon": "",
@@ -107,11 +107,11 @@ class TestSearchEndpoint:
         assert response.status_code == 200
         assert "empty" in response.text.lower() or "error" in response.text.lower()
 
-    def test_search_returns_html(self, client, temp_db):
+    def test_search_returns_html(self, auth_client, temp_db):
         """Test that search endpoint returns HTML."""
         add_test_stations(temp_db, 5)
 
-        response = client.post("/search", data={
+        response = auth_client.post("/search", data={
             "address": "",
             "lat": "40.7128",
             "lon": "-74.0060",
@@ -123,8 +123,10 @@ class TestSearchEndpoint:
 class TestRefreshEndpoint:
     """Tests for the /refresh endpoint."""
 
-    def test_refresh_returns_json(self, client):
+    def test_refresh_returns_json(self, client, monkeypatch):
         """Test that refresh endpoint returns JSON response."""
+        monkeypatch.setattr(main, "ADMIN_TOKEN", None)
+        monkeypatch.setattr(main, "REFRESH_ALLOWED_IPS", [])
         response = client.post("/refresh")
         # First request should work (rate limit is 1/day)
         assert response.status_code in [200, 429, 500]  # Network-dependent in CI/local envs

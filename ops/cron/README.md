@@ -29,7 +29,7 @@ Example manual run:
 
 ```bash
 APP_DIR=/opt/ntrip-stations \
-ENV_FILE=/opt/ntrip-stations/.env-production \
+ENV_FILE=/opt/ntrip-stations/.env \
 API_URL=http://127.0.0.1:8000/refresh \
 bash /opt/ntrip-stations/ops/cron/refresh-db.sh
 ```
@@ -50,7 +50,7 @@ chmod +x /opt/ntrip-stations/ops/cron/refresh-db.sh
 tail -n 20 /opt/ntrip-stations/logs/refresh-db.log
 ```
 
-## Cron (daily at 02:00)
+## Cron (daily at 22:00)
 
 Edit crontab:
 
@@ -66,7 +66,6 @@ Add:
 
 ## Important app settings
 
-- If `ADMIN_TOKEN` is set in `.env-production`, the script must load that file.
+- If `ADMIN_TOKEN` is set in `.env`, the script must load that file (or set `ENV_FILE` accordingly).
 - If `REFRESH_ALLOWED_IPS` is set, allow the caller IP (commonly `127.0.0.1` when cron runs on the app host).
 - `REFRESH_DB_RATE_LIMIT` is enforced by the app (default documented as `1/day`), so extra runs may return `429`.
-

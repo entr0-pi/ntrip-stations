@@ -54,3 +54,14 @@ def client(temp_db):
         yield test_client
 
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def auth_client(client, monkeypatch):
+    """Test client pre-authenticated with a valid JWT cookie."""
+    from app import main
+    monkeypatch.setattr(main, "API_KEY", "test-api-key")
+    monkeypatch.setattr(main, "JWT_SECRET_KEY", "test-jwt-secret")
+    client.post("/login", data={"api_key": "test-api-key"})
+    # TestClient session now holds the jwt cookie
+    return client

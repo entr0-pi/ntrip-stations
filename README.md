@@ -14,6 +14,7 @@ A web app to find the 5 nearest RTK2GO NTRIP correction stations from any locati
 - 📥 **CSV export** button to download the 5 nearest stations
 - 💾 SQLite database with refresh button
 - 🌙 Light/Dark theme toggle
+- 🔐 **API key login** with **JWT authentication** (15-min expiry, httpOnly cookies, XSS-proof)
 - 🎨 **Color-coded distance badges** (green/yellow/red) in results table with configurable thresholds
 - 🚦 **Dual-layer rate limiting** (browser + server) for Geoapify API protection
 - ⚙️ **Environment-based configuration** for all API keys and service settings
@@ -79,8 +80,6 @@ DOCS_ADMIN_USER=admin
 DOCS_ADMIN_PASSWORD=change-me
 ```
 
-**API key:** See [examples/API_KEY.md](examples/API_KEY.md)
-
 **Geoapify key:** Get a free API key at https://www.geoapify.com/
 
 ### 3. Run the app
@@ -93,12 +92,16 @@ Open http://localhost:8000 in your browser.
 
 ## Usage
 
-1. Click **"Refresh DB"** to fetch stations from RTK2GO (takes 5-30 seconds)
-2. **Search by address** (e.g., "Montreal, Quebec") and optionally select a **country** to narrow results
-3. **Or search by coordinates** (latitude/longitude)
-4. View the 5 nearest stations on the map with distance in kilometers
-5. **Download results as CSV** using the download button below the table
-6. Click anywhere on the map to search from that location
+1. **Log in** with your API key (found in [examples/API_KEY.md](examples/API_KEY.md))
+   - You'll receive a JWT token valid for 15 minutes
+   - After expiration, simply log in again
+2. **Database is refreshed daily** by the server (via cron job)
+3. **Search by address** (e.g., "Montreal, Quebec") and optionally select a **country** to narrow results
+4. **Or search by coordinates** (latitude/longitude)
+5. View the 5 nearest stations on the map with distance in kilometers
+6. **Download results as CSV** using the download button below the table
+7. Click anywhere on the map to search from that location
+8. Use the **Logout** button in the header when done
 
 ### Rate Limiting
 
@@ -108,9 +111,6 @@ The app includes comprehensive rate limiting to protect external APIs and resour
 - **Browser-side:** Search button disables for 5 seconds after each search (instant UX feedback)
 - **Server-side:** Hard limit of 5 requests per second per IP address (tamper-proof protection)
 - **Rate limit alert:** If the server limit is hit, a warning message appears above the search form and the button is blocked until the limit window resets
-
-**Refresh Endpoint** (RTK2GO NTRIP server):
-- **Server-side:** Limited to 1 refresh per day per IP address to prevent excessive downloads
 
 Both search layers and the refresh limit are configurable via `.env` file. Rate limit format supports flexible intervals: `<count>/<unit>` where unit is `second`, `minute`, `hour`, or `day`.
 

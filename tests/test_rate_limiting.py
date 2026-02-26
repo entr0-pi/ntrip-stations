@@ -8,7 +8,7 @@ from app import crud
 class TestRateLimiting:
     """Test slowapi rate limiting on /search endpoint."""
 
-    def test_search_requires_address_or_coordinates(self, client, temp_db):
+    def test_search_requires_address_or_coordinates(self, auth_client, temp_db):
         """Test that /search endpoint requires either address or coordinates."""
         # Add a test station to the database
         from app.models import Station
@@ -31,7 +31,7 @@ class TestRateLimiting:
         temp_db.commit()
 
         # Search with no address or coordinates should error
-        response = client.post("/search", data={
+        response = auth_client.post("/search", data={
             "address": "",
             "lat": "",
             "lon": "",
@@ -40,7 +40,7 @@ class TestRateLimiting:
         assert response.status_code == 200  # Returns HTML with error message
         assert "address or coordinates" in response.text.lower()
 
-    def test_search_with_coordinates(self, client, temp_db):
+    def test_search_with_coordinates(self, auth_client, temp_db):
         """Test /search with explicit coordinates."""
         from app.models import Station
         from datetime import datetime, timezone
@@ -67,7 +67,7 @@ class TestRateLimiting:
         temp_db.commit()
 
         # Search with coordinates should work
-        response = client.post("/search", data={
+        response = auth_client.post("/search", data={
             "address": "",
             "lat": "40.7128",
             "lon": "-74.0060",
@@ -76,9 +76,9 @@ class TestRateLimiting:
         assert response.status_code == 200
         assert "TEST0" in response.text or "nearest" in response.text.lower()
 
-    def test_empty_database_search_error(self, client):
+    def test_empty_database_search_error(self, auth_client):
         """Test that searching with empty database returns appropriate error."""
-        response = client.post("/search", data={
+        response = auth_client.post("/search", data={
             "address": "New York",
             "lat": "",
             "lon": "",
@@ -87,16 +87,21 @@ class TestRateLimiting:
         assert response.status_code == 200
         assert "empty" in response.text.lower() or "error" in response.text.lower()
 
-    def test_index_page_loads(self, client, temp_db):
+    def test_index_page_loads(self, auth_client, temp_db):
         """Test that the index page loads with country dropdown."""
-        response = client.get("/")
+        response = auth_client.get("/")
         assert response.status_code == 200
         assert "Find Nearest Stations" in response.text
         # Should have country dropdown
         assert "country_code" in response.text or "countries" in response.text.lower()
 
-    def test_refresh_endpoint_works(self, client, temp_db):
+    def test_refresh_endpoint_works(self, client, temp_db, monkeypatch):
         """Test that /refresh endpoint returns JSON response."""
+        from app import main
+        # Disable ADMIN_TOKEN requirement so we can test the endpoint without auth
+        monkeypatch.setattr(main, "ADMIN_TOKEN", None)
+        monkeypatch.setattr(main, "REFRESH_ALLOWED_IPS", [])
+
         # First request may succeed or hit rate limit (1/day)
         response = client.post("/refresh")
         assert response.status_code in [200, 429, 500]
