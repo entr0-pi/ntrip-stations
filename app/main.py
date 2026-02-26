@@ -197,7 +197,7 @@ async def login_page(request: Request):
 
 
 @app.post("/login", include_in_schema=False)
-async def login(request: Request, api_key: str = Form(...)):
+async def login(request: Request, api_key: str = Form(default="")):
     """Validate API key and issue a JWT cookie. Redirects to / on success."""
     if not API_KEY or not secrets.compare_digest(api_key, API_KEY):
         return templates.TemplateResponse(
