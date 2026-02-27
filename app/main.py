@@ -317,6 +317,10 @@ async def search(request: Request, db: Session = Depends(get_db)):
         Rendered HTML template with up to 5 nearest stations and their details,
         or an error message if validation/lookup fails.
     """
+    # Preflight requests (from the JS fetch() rate-limit check) must not be logged;
+    # only the subsequent form.submit() — the real search — should be counted.
+    is_preflight = request.headers.get("X-Search-Preflight") == "1"
+
     form = await request.form()
     address = form.get("address", "").strip()
     lat_str = form.get("lat", "").strip()
@@ -328,13 +332,14 @@ async def search(request: Request, db: Session = Depends(get_db)):
 
     # Check if database is populated
     if count == 0:
-        try:
-            crud.log_search(db, get_client_ip(request),
-                            "address" if address else "coordinates",
-                            address if address else f"{lat_str},{lon_str}",
-                            None, None, None, False)
-        except Exception:
-            logger.warning("log_search failed (empty-db path)", exc_info=True)
+        if not is_preflight:
+            try:
+                crud.log_search(db, get_client_ip(request),
+                                "address" if address else "coordinates",
+                                address if address else f"{lat_str},{lon_str}",
+                                None, None, None, False)
+            except Exception:
+                logger.warning("log_search failed (empty-db path)", exc_info=True)
         return templates.TemplateResponse(request, "index.html", {
             "station_count": count,
             "last_updated": last_updated,
@@ -359,13 +364,14 @@ async def search(request: Request, db: Session = Depends(get_db)):
         else:
             raise ValueError("Please enter an address or coordinates.")
     except ValueError as e:
-        try:
-            crud.log_search(db, get_client_ip(request),
-                            "address" if address else "coordinates",
-                            address if address else f"{lat_str},{lon_str}",
-                            None, None, None, False)
-        except Exception:
-            logger.warning("log_search failed (ValueError path)", exc_info=True)
+        if not is_preflight:
+            try:
+                crud.log_search(db, get_client_ip(request),
+                                "address" if address else "coordinates",
+                                address if address else f"{lat_str},{lon_str}",
+                                None, None, None, False)
+            except Exception:
+                logger.warning("log_search failed (ValueError path)", exc_info=True)
         return templates.TemplateResponse(request, "index.html", {
             "station_count": count,
             "last_updated": last_updated,
@@ -380,13 +386,14 @@ async def search(request: Request, db: Session = Depends(get_db)):
     nearest = find_nearest(lat, lon, all_stations, n=5)
 
     if not nearest:
-        try:
-            crud.log_search(db, get_client_ip(request),
-                            "address" if address else "coordinates",
-                            address if address else f"{lat_str},{lon_str}",
-                            lat, lon, resolved_address, False)
-        except Exception:
-            logger.warning("log_search failed (no-nearest path)", exc_info=True)
+        if not is_preflight:
+            try:
+                crud.log_search(db, get_client_ip(request),
+                                "address" if address else "coordinates",
+                                address if address else f"{lat_str},{lon_str}",
+                                lat, lon, resolved_address, False)
+            except Exception:
+                logger.warning("log_search failed (no-nearest path)", exc_info=True)
         return templates.TemplateResponse(request, "index.html", {
             "station_count": count,
             "last_updated": last_updated,
@@ -420,13 +427,14 @@ async def search(request: Request, db: Session = Depends(get_db)):
         ],
     }
 
-    try:
-        crud.log_search(db, get_client_ip(request),
-                        "address" if address else "coordinates",
-                        address if address else f"{lat_str},{lon_str}",
-                        lat, lon, resolved_address, True)
-    except Exception:
-        logger.warning("log_search failed (success path)", exc_info=True)
+    if not is_preflight:
+        try:
+            crud.log_search(db, get_client_ip(request),
+                            "address" if address else "coordinates",
+                            address if address else f"{lat_str},{lon_str}",
+                            lat, lon, resolved_address, True)
+        except Exception:
+            logger.warning("log_search failed (success path)", exc_info=True)
 
     return templates.TemplateResponse(request, "index.html", {
         "station_count": count,

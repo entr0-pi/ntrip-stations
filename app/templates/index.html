@@ -404,6 +404,7 @@
         const formData = new FormData(form);
         const response = await fetch('/search', {
           method: 'POST',
+          headers: { 'X-Search-Preflight': '1' },
           body: formData
         });
 
