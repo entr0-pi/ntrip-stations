@@ -3,11 +3,12 @@
 This module defines the database schema:
 - Country: ISO 3166-1 alpha-2 country code lookup table
 - Station: Cached RTK2GO NTRIP station records with geolocation and protocol info
+- SearchLog: Audit log of every search performed via POST /search
 
 All models inherit from `Base` (DeclarativeBase) defined in database.py.
 """
 
-from sqlalchemy import Column, Integer, String, Float, DateTime
+from sqlalchemy import Boolean, Column, Integer, String, Float, DateTime
 from sqlalchemy.sql import func
 from app.database import Base
 
@@ -62,3 +63,33 @@ class Station(Base):
     auth      = Column(String)
     bitrate   = Column(String)
     updated_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class SearchLog(Base):
+    """Audit log of every search performed via POST /search.
+
+    Recorded on both successful and failed searches for analytics and abuse
+    detection. All geocoding-related fields are nullable to handle error paths.
+
+    Attributes:
+        id: Auto-increment primary key.
+        timestamp: UTC datetime of the search, set by the DB on insert.
+        ip_address: Client IP (IPv4 or IPv6) from get_client_ip().
+        input_type: "address" or "coordinates".
+        raw_input: Address string, or "lat,lon" string for coordinate input.
+        resolved_lat: Final latitude used for station lookup; None on error.
+        resolved_lon: Final longitude used for station lookup; None on error.
+        resolved_address: Geocoded address string; None for coord input or error.
+        success: True if nearest stations were returned, False on any error.
+    """
+    __tablename__ = "search_logs"
+
+    id               = Column(Integer, primary_key=True, index=True)
+    timestamp        = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    ip_address       = Column(String, nullable=False)
+    input_type       = Column(String, nullable=False)
+    raw_input        = Column(String, nullable=False)
+    resolved_lat     = Column(Float, nullable=True)
+    resolved_lon     = Column(Float, nullable=True)
+    resolved_address = Column(String, nullable=True)
+    success          = Column(Boolean, nullable=False)

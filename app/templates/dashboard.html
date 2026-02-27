@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="cupcake">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RTK2GO Station Finder — Admin Dashboard</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- DaisyUI -->
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4/dist/full.min.css" rel="stylesheet" />
+
+    <script>
+      (function() {
+        const savedTheme = localStorage.getItem('theme');
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const theme = savedTheme || (prefersDark ? 'dim' : 'cupcake');
+        document.documentElement.setAttribute('data-theme', theme);
+      })();
+    </script>
+</head>
+<body class="bg-base-200 min-h-screen p-4">
+<div class="max-w-5xl mx-auto space-y-6">
+
+  <!-- Header -->
+  <div class="card bg-base-100 shadow">
+    <div class="card-body py-4">
+      <div class="flex items-center justify-between flex-wrap gap-2">
+        <h1 class="card-title text-2xl">Admin Dashboard</h1>
+        <span class="badge badge-neutral">RTK2GO Station Finder</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stat cards -->
+  <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
+
+    <div class="card bg-base-100 shadow">
+      <div class="card-body items-center text-center p-4">
+        <div class="text-3xl font-bold">{{ stats.total_searches }}</div>
+        <div class="text-sm text-base-content/60">Total Searches</div>
+      </div>
+    </div>
+
+    <div class="card bg-success/10 shadow">
+      <div class="card-body items-center text-center p-4">
+        <div class="text-3xl font-bold text-success">{{ stats.successful_searches }}</div>
+        <div class="text-sm text-base-content/60">Successful</div>
+      </div>
+    </div>
+
+    <div class="card bg-error/10 shadow">
+      <div class="card-body items-center text-center p-4">
+        <div class="text-3xl font-bold text-error">{{ stats.error_searches }}</div>
+        <div class="text-sm text-base-content/60">Errors</div>
+      </div>
+    </div>
+
+    <div class="card bg-base-100 shadow">
+      <div class="card-body items-center text-center p-4">
+        <div class="text-3xl font-bold">{{ stats.unique_ips }}</div>
+        <div class="text-sm text-base-content/60">Unique IPs</div>
+      </div>
+    </div>
+
+    <div class="card bg-base-100 shadow">
+      <div class="card-body items-center text-center p-4">
+        <div class="text-3xl font-bold">{{ stats.searches_today }}</div>
+        <div class="text-sm text-base-content/60">Today</div>
+      </div>
+    </div>
+
+    <div class="card bg-base-100 shadow">
+      <div class="card-body items-center text-center p-4">
+        <div class="text-3xl font-bold">{{ stats.searches_this_week }}</div>
+        <div class="text-sm text-base-content/60">This Week</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Recent Searches -->
+  <div class="card bg-base-100 shadow">
+    <div class="card-body">
+      <h2 class="card-title text-lg mb-2">Recent Searches (last 50)</h2>
+      <div class="overflow-x-auto">
+        <table class="table table-zebra table-sm w-full">
+          <thead>
+            <tr>
+              <th>Timestamp (UTC)</th>
+              <th>IP</th>
+              <th>Type</th>
+              <th>Raw Input</th>
+              <th>Resolved Address</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in recent %}
+            <tr>
+              <td class="font-mono text-xs whitespace-nowrap">
+                {{ r.timestamp.strftime('%Y-%m-%d %H:%M:%S') if r.timestamp else '—' }}
+              </td>
+              <td class="font-mono text-xs">{{ r.ip_address }}</td>
+              <td>
+                <span class="badge badge-sm badge-outline">{{ r.input_type }}</span>
+              </td>
+              <td class="text-xs max-w-xs truncate">{{ r.raw_input }}</td>
+              <td class="text-xs max-w-xs truncate">{{ r.resolved_address or '—' }}</td>
+              <td>
+                {% if r.success %}
+                  <span class="badge badge-success badge-sm">OK</span>
+                {% else %}
+                  <span class="badge badge-error badge-sm">Error</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="6" class="text-center text-base-content/50 py-4">No searches recorded yet.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Top IPs + Daily Counts side-by-side on wide screens -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+    <!-- Top IPs -->
+    <div class="card bg-base-100 shadow">
+      <div class="card-body">
+        <h2 class="card-title text-lg mb-2">Top IPs by Search Count</h2>
+        <div class="overflow-x-auto">
+          <table class="table table-zebra table-sm w-full">
+            <thead>
+              <tr><th>IP Address</th><th>Count</th><th></th></tr>
+            </thead>
+            <tbody>
+              {% for row in top_ips %}
+              <tr>
+                <td class="font-mono text-sm">{{ row.ip }}</td>
+                <td>{{ row.count }}</td>
+                <td class="w-24">
+                  <progress class="progress progress-primary w-full"
+                            value="{{ row.count }}"
+                            max="{{ top_ips[0].count if top_ips else 1 }}"></progress>
+                </td>
+              </tr>
+              {% else %}
+              <tr>
+                <td colspan="3" class="text-center text-base-content/50 py-4">No data yet.</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Daily Counts -->
+    <div class="card bg-base-100 shadow">
+      <div class="card-body">
+        <h2 class="card-title text-lg mb-2">Daily Searches (last 30 days)</h2>
+        <div class="overflow-x-auto">
+          {% set max_day = (per_day | map(attribute='count') | list | max) if per_day else 1 %}
+          <table class="table table-zebra table-sm w-full">
+            <thead>
+              <tr><th>Date</th><th>Searches</th><th></th></tr>
+            </thead>
+            <tbody>
+              {% for row in per_day | reverse %}
+              <tr>
+                <td class="font-mono text-sm">{{ row.date }}</td>
+                <td>{{ row.count }}</td>
+                <td class="w-32">
+                  <progress class="progress progress-accent w-full"
+                            value="{{ row.count }}"
+                            max="{{ max_day if max_day > 0 else 1 }}"></progress>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+</body>
+</html>

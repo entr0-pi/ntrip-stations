@@ -55,6 +55,9 @@ JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "")
 _JWT_ALGORITHM = "HS256"
 _JWT_EXPIRE_MINUTES = 15
 
+# Dashboard authentication (separate key; dashboard is disabled if unset)
+DASHBOARD_KEY = os.getenv("DASHBOARD_KEY", "")
+
 # /refresh endpoint authentication (both optional; endpoint is open if unset)
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN")
 DOCS_ADMIN_USER = os.getenv("DOCS_ADMIN_USER")
@@ -144,6 +147,8 @@ async def lifespan(app: FastAPI):
         raise RuntimeError("API_KEY must be set to at least 16 characters. Generate with: python3 -c \"import secrets; print(secrets.token_hex(8))\"")
     if not JWT_SECRET_KEY or len(JWT_SECRET_KEY) < 32:
         raise RuntimeError("JWT_SECRET_KEY must be set to at least 32 characters. Generate with: python3 -c \"import secrets; print(secrets.token_hex(16))\"")
+    if not DASHBOARD_KEY:
+        logger.warning("DASHBOARD_KEY is not set — GET /dashboard will return 403 for all requests")
 
     # Create tables on startup if they don't exist
     models.Base.metadata.create_all(bind=engine)
@@ -239,6 +244,28 @@ async def logout():
     return resp
 
 
+@app.get("/dashboard", response_class=HTMLResponse, include_in_schema=False)
+async def dashboard(request: Request, key: str = "", db: Session = Depends(get_db)):
+    """Admin dashboard showing search analytics.
+
+    Protected by a dedicated DASHBOARD_KEY via ?key= query parameter
+    (constant-time compare). Returns 403 on missing or invalid key to
+    avoid triggering browser auth dialogs.
+
+    Query params:
+        key: Plain-text key matching the DASHBOARD_KEY environment variable.
+    """
+    if not DASHBOARD_KEY or not secrets.compare_digest(key, DASHBOARD_KEY):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    return templates.TemplateResponse(request, "dashboard.html", {
+        "stats":   crud.get_search_stats(db),
+        "recent":  crud.get_recent_searches(db, limit=50),
+        "top_ips": crud.get_top_ips(db, limit=10),
+        "per_day": crud.get_searches_per_day(db, days=30),
+    })
+
+
 @app.get("/", response_class=HTMLResponse)
 async def index(
     request: Request,
@@ -301,6 +328,13 @@ async def search(request: Request, db: Session = Depends(get_db)):
 
     # Check if database is populated
     if count == 0:
+        try:
+            crud.log_search(db, get_client_ip(request),
+                            "address" if address else "coordinates",
+                            address if address else f"{lat_str},{lon_str}",
+                            None, None, None, False)
+        except Exception:
+            logger.warning("log_search failed (empty-db path)", exc_info=True)
         return templates.TemplateResponse(request, "index.html", {
             "station_count": count,
             "last_updated": last_updated,
@@ -325,6 +359,13 @@ async def search(request: Request, db: Session = Depends(get_db)):
         else:
             raise ValueError("Please enter an address or coordinates.")
     except ValueError as e:
+        try:
+            crud.log_search(db, get_client_ip(request),
+                            "address" if address else "coordinates",
+                            address if address else f"{lat_str},{lon_str}",
+                            None, None, None, False)
+        except Exception:
+            logger.warning("log_search failed (ValueError path)", exc_info=True)
         return templates.TemplateResponse(request, "index.html", {
             "station_count": count,
             "last_updated": last_updated,
@@ -339,6 +380,13 @@ async def search(request: Request, db: Session = Depends(get_db)):
     nearest = find_nearest(lat, lon, all_stations, n=5)
 
     if not nearest:
+        try:
+            crud.log_search(db, get_client_ip(request),
+                            "address" if address else "coordinates",
+                            address if address else f"{lat_str},{lon_str}",
+                            lat, lon, resolved_address, False)
+        except Exception:
+            logger.warning("log_search failed (no-nearest path)", exc_info=True)
         return templates.TemplateResponse(request, "index.html", {
             "station_count": count,
             "last_updated": last_updated,
@@ -371,6 +419,14 @@ async def search(request: Request, db: Session = Depends(get_db)):
             for i, (dist, st) in enumerate(nearest)
         ],
     }
+
+    try:
+        crud.log_search(db, get_client_ip(request),
+                        "address" if address else "coordinates",
+                        address if address else f"{lat_str},{lon_str}",
+                        lat, lon, resolved_address, True)
+    except Exception:
+        logger.warning("log_search failed (success path)", exc_info=True)
 
     return templates.TemplateResponse(request, "index.html", {
         "station_count": count,

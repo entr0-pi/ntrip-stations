@@ -41,8 +41,14 @@ Create a `.env` file in the project root:
 API_KEY=7l33761epAHB17jPbQyKOBElQ3IFiaznmK9CgADSfwzzFdVL7Yw83SrK3wToTuNE
 JWT_SECRET_KEY=generate-a-random-secret-key-here
 
-# Generate a strong JWT_SECRET_KEY:
+# Generate strong secrets:
 # python3 -c "import secrets; print(secrets.token_hex(32))"
+
+# ============================================================================
+# Admin dashboard (optional — dashboard returns 403 if unset)
+# Access: GET /dashboard?key=<DASHBOARD_KEY>
+# ============================================================================
+DASHBOARD_KEY=generate-a-separate-dashboard-secret-here
 
 # ============================================================================
 # Geocoding API (Geoapify) - required for address searches
@@ -169,12 +175,15 @@ All service configurations are managed via environment variables in the `.env` f
 
 | Variable | Purpose | Example |
 |----------|---------|---------|
+| `API_KEY` | Password for the login page (min 16 chars) | `token_hex(32)` |
+| `JWT_SECRET_KEY` | Secret used to sign JWT cookies (min 32 chars) | `token_hex(32)` |
 | `GEOAPIFY_API_KEY` | Geocoding API credentials | `abc123...` |
 
 ### Optional Variables (with defaults)
 
 | Variable | Purpose | Default |
 |----------|---------|---------|
+| `DASHBOARD_KEY` | Key for `GET /dashboard?key=<value>` admin dashboard | unset (disabled) |
 | `GEOAPIFY_API_RATE_LIMIT` | Search API request limit per time unit | `5/second` |
 | `REFRESH_DB_RATE_LIMIT` | Database refresh limit per time unit | `1/day` |
 | `BROWSER_SEARCH_COOLDOWN_SECS` | Button cooldown after search | `5` |
