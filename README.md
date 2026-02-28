@@ -38,7 +38,7 @@ Create a `.env` file in the project root:
 # ============================================================================
 # Authentication (required for login)
 # ============================================================================
-API_KEY=7l33761epAHB17jPbQyKOBElQ3IFiaznmK9CgADSfwzzFdVL7Yw83SrK3wToTuNE
+API_KEY=generate-a-random-secret-key-here
 JWT_SECRET_KEY=generate-a-random-secret-key-here
 
 # Generate strong secrets:
