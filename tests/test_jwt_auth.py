@@ -39,7 +39,7 @@ class TestLoginPage:
     def test_login_valid_api_key_redirects(self, client, monkeypatch):
         """Test that POST /login with valid API key redirects to /."""
         monkeypatch.setattr(main, "API_KEY", "test-api-key")
-        monkeypatch.setattr(main, "JWT_SECRET_KEY", "test-jwt-secret")
+        monkeypatch.setattr(main, "JWT_SECRET_KEY", "test-jwt-secret-key-padded-to-32b")
         response = client.post("/login", data={"api_key": "test-api-key"}, follow_redirects=False)
         assert response.status_code == 302
         assert response.headers["location"] == "/"
@@ -47,7 +47,7 @@ class TestLoginPage:
     def test_login_jwt_cookie_is_httponly(self, client, monkeypatch):
         """Test that JWT cookie is set with HttpOnly flag."""
         monkeypatch.setattr(main, "API_KEY", "test-api-key")
-        monkeypatch.setattr(main, "JWT_SECRET_KEY", "test-jwt-secret")
+        monkeypatch.setattr(main, "JWT_SECRET_KEY", "test-jwt-secret-key-padded-to-32b")
         response = client.post("/login", data={"api_key": "test-api-key"}, follow_redirects=False)
         set_cookie = response.headers.get("set-cookie", "")
         assert "httponly" in set_cookie.lower()
@@ -70,25 +70,29 @@ class TestProtectedIndexRoute:
 
     def test_index_rejects_expired_jwt(self, client, monkeypatch):
         """Test that GET / with expired JWT redirects to /login."""
-        monkeypatch.setattr(main, "JWT_SECRET_KEY", "test-jwt-secret")
+        monkeypatch.setattr(main, "JWT_SECRET_KEY", "test-jwt-secret-key-padded-to-32b")
         expired = _jwt.encode(
             {"exp": datetime.now(timezone.utc) - timedelta(hours=1)},
-            "test-jwt-secret",
+            "test-jwt-secret-key-padded-to-32b",
             algorithm="HS256",
         )
-        response = client.get("/", cookies={"jwt": expired}, follow_redirects=False)
+        client.cookies.set("jwt", expired)
+        response = client.get("/", follow_redirects=False)
+        del client.cookies["jwt"]
         assert response.status_code == 302
         assert "/login" in response.headers["location"]
 
     def test_index_rejects_tampered_jwt(self, client, monkeypatch):
         """Test that GET / with JWT signed with wrong secret redirects to /login."""
-        monkeypatch.setattr(main, "JWT_SECRET_KEY", "test-jwt-secret")
+        monkeypatch.setattr(main, "JWT_SECRET_KEY", "test-jwt-secret-key-padded-to-32b")
         tampered = _jwt.encode(
             {"exp": datetime.now(timezone.utc) + timedelta(hours=1)},
-            "wrong-secret",
+            "wrong-secret-key-padded-to-32bytes",
             algorithm="HS256",
         )
-        response = client.get("/", cookies={"jwt": tampered}, follow_redirects=False)
+        client.cookies.set("jwt", tampered)
+        response = client.get("/", follow_redirects=False)
+        del client.cookies["jwt"]
         assert response.status_code == 302
         assert "/login" in response.headers["location"]
 
@@ -113,24 +117,28 @@ class TestProtectedSearchRoute:
 
     def test_search_rejects_expired_jwt(self, client, monkeypatch):
         """Test that POST /search with expired JWT returns 401."""
-        monkeypatch.setattr(main, "JWT_SECRET_KEY", "test-jwt-secret")
+        monkeypatch.setattr(main, "JWT_SECRET_KEY", "test-jwt-secret-key-padded-to-32b")
         expired = _jwt.encode(
             {"exp": datetime.now(timezone.utc) - timedelta(hours=1)},
-            "test-jwt-secret",
+            "test-jwt-secret-key-padded-to-32b",
             algorithm="HS256",
         )
-        response = client.post("/search", data={"address": "Paris"}, cookies={"jwt": expired})
+        client.cookies.set("jwt", expired)
+        response = client.post("/search", data={"address": "Paris"})
+        del client.cookies["jwt"]
         assert response.status_code == 401
 
     def test_search_rejects_tampered_jwt(self, client, monkeypatch):
         """Test that POST /search with JWT signed with wrong secret returns 401."""
-        monkeypatch.setattr(main, "JWT_SECRET_KEY", "test-jwt-secret")
+        monkeypatch.setattr(main, "JWT_SECRET_KEY", "test-jwt-secret-key-padded-to-32b")
         tampered = _jwt.encode(
             {"exp": datetime.now(timezone.utc) + timedelta(hours=1)},
-            "wrong-secret",
+            "wrong-secret-key-padded-to-32bytes",
             algorithm="HS256",
         )
-        response = client.post("/search", data={"address": "Paris"}, cookies={"jwt": tampered})
+        client.cookies.set("jwt", tampered)
+        response = client.post("/search", data={"address": "Paris"})
+        del client.cookies["jwt"]
         assert response.status_code == 401
 
 
