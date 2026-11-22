@@ -302,18 +302,17 @@ def get_searches_per_day(db: Session, days: int = 30) -> list[dict]:
     from datetime import timedelta
     cutoff = datetime.now(timezone.utc) - timedelta(days=days - 1)
 
+    # date() works on both SQLite (returns 'YYYY-MM-DD' str) and Postgres (returns date)
+    day = func.date(SearchLog.timestamp)
     rows = (
-        db.query(
-            func.strftime("%Y-%m-%d", SearchLog.timestamp).label("date"),
-            func.count(SearchLog.id).label("count"),
-        )
+        db.query(day.label("date"), func.count(SearchLog.id).label("count"))
         .filter(SearchLog.timestamp >= cutoff)
-        .group_by(func.strftime("%Y-%m-%d", SearchLog.timestamp))
-        .order_by(func.strftime("%Y-%m-%d", SearchLog.timestamp))
+        .group_by(day)
+        .order_by(day)
         .all()
     )
 
-    counts_by_date = {r.date: r.count for r in rows}
+    counts_by_date = {str(r.date): r.count for r in rows}
     result = []
     for i in range(days):
         d = (datetime.now(timezone.utc) - timedelta(days=days - 1 - i)).strftime("%Y-%m-%d")

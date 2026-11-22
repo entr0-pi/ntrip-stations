@@ -316,3 +316,35 @@ ENDSOURCETABLE"""
         stations = parse_sourcetable(raw)
         assert len(stations) == 1
         assert stations[0]["mount"] == "mount1"
+
+
+class TestCronRefreshEndpoint:
+    """Tests for GET /api/cron/refresh (Vercel Cron)."""
+
+    SOURCETABLE = (
+        "SOURCETABLE 200 OK\r\n"
+        "STR;MOUNT1;Paris;RTCM 3.2;1004(1);2;GPS;NET;FRA;48.85;2.35;0;0;sNTRIP;none;B;N;5000;\r\n"
+        "ENDSOURCETABLE\r\n"
+    )
+
+    def test_cron_disabled_without_secret(self, client, monkeypatch):
+        monkeypatch.setattr(main, "CRON_SECRET", "")
+        response = client.get("/api/cron/refresh")
+        assert response.status_code == 404
+
+    def test_cron_rejects_missing_or_wrong_token(self, client, monkeypatch):
+        monkeypatch.setattr(main, "CRON_SECRET", "cron-secret")
+        assert client.get("/api/cron/refresh").status_code == 401
+        response = client.get("/api/cron/refresh", headers={"Authorization": "Bearer nope"})
+        assert response.status_code == 401
+
+    def test_cron_refreshes_with_valid_token(self, client, monkeypatch):
+        monkeypatch.setattr(main, "CRON_SECRET", "cron-secret")
+        monkeypatch.setattr(main, "fetch_sourcetable", lambda: self.SOURCETABLE)
+        response = client.get(
+            "/api/cron/refresh", headers={"Authorization": "Bearer cron-secret"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["ok"] is True
+        assert data["count"] == 1

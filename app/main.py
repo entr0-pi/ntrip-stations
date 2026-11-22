@@ -60,6 +60,7 @@ DASHBOARD_KEY = os.getenv("DASHBOARD_KEY", "")
 
 # /refresh endpoint authentication (both optional; endpoint is open if unset)
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN")
+CRON_SECRET = os.getenv("CRON_SECRET", "")  # Vercel Cron bearer token (GET /api/cron/refresh)
 DOCS_ADMIN_USER = os.getenv("DOCS_ADMIN_USER")
 DOCS_ADMIN_PASSWORD = os.getenv("DOCS_ADMIN_PASSWORD")
 REFRESH_ALLOWED_IPS = (
@@ -466,7 +467,26 @@ async def refresh_db(request: Request, db: Session = Depends(get_db)):
         if not secrets.compare_digest(provided_token, ADMIN_TOKEN):
             raise HTTPException(status_code=401, detail="Unauthorized: invalid or missing X-Admin-Token")
     # ────────────────────────────────────────────────────────────────────────
+    return await _do_refresh(db)
 
+
+@app.get("/api/cron/refresh", include_in_schema=False)
+async def cron_refresh(request: Request, db: Session = Depends(get_db)):
+    """Vercel Cron entrypoint: GET with `Authorization: Bearer <CRON_SECRET>`.
+
+    Disabled (404) unless CRON_SECRET is set. Shares the refresh logic and
+    DB-based rate limit with POST /refresh.
+    """
+    if not CRON_SECRET:
+        raise HTTPException(status_code=404, detail="Not Found")
+    provided = request.headers.get("Authorization", "")
+    if not secrets.compare_digest(provided, f"Bearer {CRON_SECRET}"):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return await _do_refresh(db)
+
+
+async def _do_refresh(db: Session) -> JSONResponse:
+    """Rate-limit check, then fetch RTK2GO sourcetable and replace all stations."""
     try:
         # ── Rate limiting: Check minimum interval since last update ──────────
         last_updated = crud.get_last_updated(db)

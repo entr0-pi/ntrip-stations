@@ -137,7 +137,7 @@ DISTANCE_BADGE_YELLOW_KM=300   # Change to adjust yellow threshold
 
 - **Backend:** FastAPI + Uvicorn + SQLAlchemy
 - **Frontend:** Tailwind CSS + DaisyUI + Leaflet.js
-- **Database:** SQLite
+- **Database:** SQLite (default) or Postgres via `DATABASE_URL` (e.g. Neon on Vercel)
 - **Data:** RTK2GO (NTRIP caster), Geoapify (geocoding)
 
 ## Project Structure
@@ -159,12 +159,15 @@ ntrip-stations/
 ├── data/
 │   └── ISO 3166-1 alpha-2 Country Code List.csv    Country reference data
 ├── .env                 Environment variables (create this file)
+├── index.py             Vercel entrypoint (exposes app.main:app)
+├── vercel.json          Vercel config (daily cron → /api/cron/refresh)
 ├── .env.example         Example .env template
-├── requirements.txt     Python dependencies
+├── requirements.txt     Python dependencies (runtime)
+├── requirements-dev.txt Test dependencies (includes requirements.txt)
 ├── pytest.ini           Pytest configuration
 ├── TESTING.md           Testing documentation
-├── run.py               Entry point
-└── rtk2go.db            SQLite database (auto-created)
+├── run.py               Local / VM entry point (uvicorn)
+└── rtk2go.db            SQLite database (auto-created, local / VM only)
 ```
 
 ## Configuration
@@ -183,6 +186,8 @@ All service configurations are managed via environment variables in the `.env` f
 
 | Variable | Purpose | Default |
 |----------|---------|---------|
+| `DATABASE_URL` | Database connection URL; set to Postgres for Vercel (`postgres://…` accepted) | local SQLite `rtk2go.db` |
+| `CRON_SECRET` | Bearer token for `GET /api/cron/refresh` (Vercel Cron); route disabled if unset | unset |
 | `DASHBOARD_KEY` | Key for `GET /dashboard?key=<value>` admin dashboard | unset (disabled) |
 | `GEOAPIFY_API_RATE_LIMIT` | Search API request limit per time unit | `5/second` |
 | `REFRESH_DB_RATE_LIMIT` | Database refresh limit per time unit | `1/day` |
@@ -207,8 +212,8 @@ The project includes comprehensive test coverage for all major features.
 ### Run Tests
 
 ```bash
-# Install test dependencies (already in requirements.txt)
-pip install -r requirements.txt
+# Install runtime + test dependencies
+pip install -r requirements-dev.txt
 
 # Run all tests
 pytest tests/ -v
@@ -233,13 +238,17 @@ See [TESTING.md](TESTING.md) for detailed testing documentation.
 
 ## Deployment
 
-For production deployment behind a reverse proxy, see [DEPLOYMENT.md](DEPLOYMENT.md) which includes:
+Two deployment options are supported. Both are described step by step in [DEPLOYMENT.md](DEPLOYMENT.md).
 
-- Step-by-step setup guide for Linux servers
-- systemd service configuration
-- Reverse proxy configuration requirements
-- Rate limiting configuration for proxy environments
-- Security best practices and firewall setup
-- Monitoring, troubleshooting, and performance tuning
+| | [Option A: VM / VPS](DEPLOYMENT.md#option-a-vm--vps-deployment-reverse-proxy) (current) | [Option B: Vercel](DEPLOYMENT.md#option-b-vercel-deployment) (new) |
+|---|---|---|
+| Runtime | uvicorn + systemd behind nginx/Apache | Serverless Python function |
+| Database | Local SQLite (`rtk2go.db`) | Hosted Postgres, e.g. Neon (`DATABASE_URL`) |
+| Daily refresh | System cron → `ops/cron/refresh-db.sh` → `POST /refresh` | Vercel Cron → `GET /api/cron/refresh` (`CRON_SECRET`) |
+| Rate limiting | Exact (single process) | Per instance only (in-memory) |
+| TLS / domain | You configure the proxy and certificates | Automatic |
+| Ops effort | Server upkeep | None |
 
-See [examples/.env.production](examples/.env.production) for production environment configuration template.
+**Option A, VM / VPS:** Linux server setup, systemd service, reverse-proxy headers, firewall, monitoring and tuning. See [examples/.env.production](examples/.env.production) for the environment template.
+
+**Option B, Vercel:** import the repo, add Neon Postgres from Vercel Storage, set the environment variables (`API_KEY`, `JWT_SECRET_KEY`, `GEOAPIFY_API_KEY`, `CRON_SECRET`, `ENVIRONMENT=production`), deploy, then trigger the first refresh. `index.py` and `vercel.json` are already in the repo.

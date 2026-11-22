@@ -1,26 +1,47 @@
 """SQLAlchemy database configuration for the RTK2GO Station Finder.
 
-Sets up a SQLite database engine, session factory, and FastAPI dependency
+Sets up the database engine (SQLite by default, Postgres via DATABASE_URL), session factory, and FastAPI dependency
 for injecting database sessions into route handlers.
 """
 
+import os
 from pathlib import Path
+from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
+from sqlalchemy.pool import NullPool
 
-# Database file stored in project root
+load_dotenv()
+
+# Default: SQLite file stored in project root (local dev / VM deployment).
+# Set DATABASE_URL to use Postgres instead (required on Vercel, e.g. Neon).
 DB_PATH = Path(__file__).parent.parent / "rtk2go.db"
-DATABASE_URL = f"sqlite:///{DB_PATH}"
 
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={
-        "check_same_thread": False,  # Required for SQLite + FastAPI's async/threading model
-        # By default SQLite enforces that database connections are used only in
-        # the same thread. FastAPI uses different threads for handling requests,
-        # so we disable this check. SQLite's locking is still thread-safe.
-    }
-)
+
+def _normalize_database_url(url: str) -> str:
+    """Make provider URLs (postgres://, postgresql://) use the psycopg 3 driver."""
+    if url.startswith("postgres://"):
+        url = "postgresql://" + url[len("postgres://"):]
+    if url.startswith("postgresql://"):
+        url = "postgresql+psycopg://" + url[len("postgresql://"):]
+    return url
+
+
+DATABASE_URL = _normalize_database_url(os.getenv("DATABASE_URL") or f"sqlite:///{DB_PATH}")
+
+if DATABASE_URL.startswith("sqlite"):
+    engine = create_engine(
+        DATABASE_URL,
+        connect_args={
+            # SQLite only allows a connection in the thread that created it;
+            # FastAPI handles requests across threads, so disable the check.
+            "check_same_thread": False,
+        },
+    )
+else:
+    # Serverless-friendly: don't keep a client-side pool between invocations.
+    # Use the provider's pooled connection URL (e.g. Neon "-pooler" host).
+    engine = create_engine(DATABASE_URL, poolclass=NullPool)
 
 # Session factory for creating database sessions
 # autocommit=False: explicit commit() required
