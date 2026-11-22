@@ -2,7 +2,7 @@
 
 A web app to find the 5 nearest RTK2GO NTRIP correction stations from any location. Search by address or coordinates, view results on an interactive map.
 
-🌐 **[See it live!](https://rtk2go.entr0-pi.com)** 🚀
+🌐 **[See it live!](https://rtk2go.entr0-pi.com)** 🚀 (hosted on Vercel, deployed with the [Vercel guide](DEPLOYMENT.md#option-b-vercel-deployment))
 
 **API key** — See [examples/API_KEY.md](examples/API_KEY.md)
 
@@ -240,7 +240,7 @@ See [TESTING.md](TESTING.md) for detailed testing documentation.
 
 Two deployment options are supported. Both are described step by step in [DEPLOYMENT.md](DEPLOYMENT.md).
 
-> **The current version runs on Vercel**, deployed by following [Option B](DEPLOYMENT.md#option-b-vercel-deployment) of the guide. Option A (VM / VPS) is still fully supported.
+> **The current version ([rtk2go.entr0-pi.com](https://rtk2go.entr0-pi.com)) runs on Vercel**, deployed by following [Option B](DEPLOYMENT.md#option-b-vercel-deployment) of the guide. Option A (VM / VPS) is still fully supported.
 
 | | [Option A: VM / VPS](DEPLOYMENT.md#option-a-vm--vps-deployment-reverse-proxy) | [Option B: Vercel](DEPLOYMENT.md#option-b-vercel-deployment) (in use) |
 |---|---|---|
