@@ -240,7 +240,9 @@ See [TESTING.md](TESTING.md) for detailed testing documentation.
 
 Two deployment options are supported. Both are described step by step in [DEPLOYMENT.md](DEPLOYMENT.md).
 
-| | [Option A: VM / VPS](DEPLOYMENT.md#option-a-vm--vps-deployment-reverse-proxy) (current) | [Option B: Vercel](DEPLOYMENT.md#option-b-vercel-deployment) (new) |
+> **The current version runs on Vercel**, deployed by following [Option B](DEPLOYMENT.md#option-b-vercel-deployment) of the guide. Option A (VM / VPS) is still fully supported.
+
+| | [Option A: VM / VPS](DEPLOYMENT.md#option-a-vm--vps-deployment-reverse-proxy) | [Option B: Vercel](DEPLOYMENT.md#option-b-vercel-deployment) (in use) |
 |---|---|---|
 | Runtime | uvicorn + systemd behind nginx/Apache | Serverless Python function |
 | Database | Local SQLite (`rtk2go.db`) | Hosted Postgres, e.g. Neon (`DATABASE_URL`) |

@@ -2,7 +2,7 @@
 
 ## Choose a deployment option
 
-| | [Option A: VM / VPS](#option-a-vm--vps-deployment-reverse-proxy) | [Option B: Vercel](#option-b-vercel-deployment) |
+| | [Option A: VM / VPS](#option-a-vm--vps-deployment-reverse-proxy) | [Option B: Vercel](#option-b-vercel-deployment) (in use) |
 |---|---|---|
 | Runtime | uvicorn + systemd behind nginx/Apache | Serverless Python function |
 | Database | Local SQLite (`rtk2go.db`) | Hosted Postgres, e.g. Neon (`DATABASE_URL`) |
@@ -433,6 +433,8 @@ location / {
 ---
 
 ## Option B: Vercel deployment
+
+> **The current version of the app runs on Vercel, deployed by following the steps below.**
 
 The repository is ready for Vercel with no build step: `index.py` exposes the FastAPI `app`, and `vercel.json` schedules the daily refresh.
 
