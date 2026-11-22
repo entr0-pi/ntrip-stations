@@ -253,4 +253,4 @@ Two deployment options are supported. Both are described step by step in [DEPLOY
 
 **Option A, VM / VPS:** Linux server setup, systemd service, reverse-proxy headers, firewall, monitoring and tuning. See [examples/.env.production](examples/.env.production) for the environment template.
 
-**Option B, Vercel:** import the repo, add Neon Postgres from Vercel Storage, set the environment variables (`API_KEY`, `JWT_SECRET_KEY`, `GEOAPIFY_API_KEY`, `CRON_SECRET`, `ENVIRONMENT=production`), deploy, then trigger the first refresh. `index.py` and `vercel.json` are already in the repo.
+**Option B, Vercel:** import the repo, add Neon Postgres from Vercel Storage, set the environment variables, deploy, then trigger the first refresh. `index.py` and `vercel.json` are already in the repo.
