@@ -251,6 +251,6 @@ Two deployment options are supported. Both are described step by step in [DEPLOY
 | TLS / domain | You configure the proxy and certificates | Automatic |
 | Ops effort | Server upkeep | None |
 
-**Option A, VM / VPS:** Linux server setup, systemd service, reverse-proxy headers, firewall, monitoring and tuning. See [examples/.env.production](examples/.env.production) for the environment template.
+**Option A, VM / VPS:** Linux server setup, systemd service, reverse-proxy headers, firewall, monitoring and tuning.
 
-**Option B, Vercel:** import the repo, add Neon Postgres from Vercel Storage, set the environment variables, deploy, then trigger the first refresh. `index.py` and `vercel.json` are already in the repo.
+**Option B, Vercel:** import the repo, add Neon Postgres from Vercel Storage, set the environment variables, deploy, then trigger the first refresh.
