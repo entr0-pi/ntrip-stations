@@ -16,6 +16,14 @@ jobs:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           set -euo pipefail
+          if [ -z "${APP_URL}" ] || [ -z "${CRON_SECRET}" ]; then
+            echo "::error::APP_URL and/or CRON_SECRET repo secrets are not set"
+            exit 1
+          fi
+          case "$APP_URL" in
+            http://*|https://*) ;;
+            *) echo "::error::APP_URL must start with https:// (got a value without a scheme)"; exit 1 ;;
+          esac
           code=$(curl -sS -o body.json -w '%{http_code}' --max-time 120 \
             -H "Authorization: Bearer ${CRON_SECRET}" \
             "${APP_URL%/}/api/cron/refresh")
