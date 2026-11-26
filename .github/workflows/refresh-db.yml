@@ -2,7 +2,7 @@ name: Refresh station database
 
 on:
   schedule:
-    - cron: "0 3 * * *"   # daily at 03:00 UTC
+    - cron: "0 */6 * * *"   # every 6 hours (00:00, 06:00, 12:00, 18:00 UTC)
   workflow_dispatch:       # allow manual runs from the Actions tab
 
 jobs:
@@ -24,6 +24,14 @@ jobs:
             http://*|https://*) ;;
             *) echo "::error::APP_URL must start with https:// (got a value without a scheme)"; exit 1 ;;
           esac
+          # Strip whitespace/newlines that often sneak in when pasting secrets
+          APP_URL="$(printf '%s' "$APP_URL" | tr -d '[:space:]')"
+          host="${APP_URL#*://}"; host="${host%%/*}"
+          if [ -z "$host" ]; then
+            echo "::error::APP_URL has no hostname after the scheme (length ${#APP_URL}). Expected e.g. https://your-app.example.com"
+            exit 1
+          fi
+          echo "Target host: $host"
           code=$(curl -sS -o body.json -w '%{http_code}' --max-time 120 \
             -H "Authorization: Bearer ${CRON_SECRET}" \
             "${APP_URL%/}/api/cron/refresh")
