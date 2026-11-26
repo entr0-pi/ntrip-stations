@@ -1,0 +1,27 @@
+name: Refresh station database
+
+on:
+  schedule:
+    - cron: "0 3 * * *"   # daily at 03:00 UTC
+  workflow_dispatch:       # allow manual runs from the Actions tab
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Call /api/cron/refresh
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          code=$(curl -sS -o body.json -w '%{http_code}' --max-time 120 \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            "${APP_URL%/}/api/cron/refresh")
+          echo "HTTP $code"
+          cat body.json; echo
+          # 200 = refreshed, 429 = already refreshed within REFRESH_DB_RATE_LIMIT (not an error)
+          if [ "$code" != "200" ] && [ "$code" != "429" ]; then
+            exit 1
+          fi
