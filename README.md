@@ -2,6 +2,22 @@
 
 A web app to find the 5 nearest RTK2GO NTRIP correction stations from any location. Search by address or coordinates, view results on an interactive map.
 
+**See it in action**
+
+Explore the five nearest correction stations to New York City: see their locations on the map, compare distances and station details, and export the results as CSV.
+
+<table>
+  <tr>
+    <td>
+      <a href="https://rtk2go.entr0-pi.com">
+        <img src="assets/new-york.png" alt="RTK2GO Station Finder demo showing the five nearest stations to New York City on a map, with distances and a downloadable results table" width="900">
+      </a>
+    </td>
+  </tr>
+</table>
+
+*Click the preview to try it live.*
+
 🌐 **[See it live!](https://rtk2go.entr0-pi.com)** 🚀 (hosted on Vercel, deployed with the [Vercel guide](DEPLOYMENT.md#option-b-vercel-deployment))
 
 **API key** — See [examples/API_KEY.md](examples/API_KEY.md)
